@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #1a1a1a;
+  --muted-foreground: #666666;
+  --primary-dark: #1e40af;
+  --gradient-card-from: rgba(255, 255, 255, 0.9);
+  --gradient-card-to: rgba(255, 255, 255, 0.7);
+  --gradient-primary-from: #3b82f6;
+  --gradient-primary-to: #1d4ed8;
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}

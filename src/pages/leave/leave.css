@@ -1,0 +1,250 @@
+.leave_container {
+  padding: 24px;
+}
+
+.leave_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.leave_title {
+  color: #111827;
+}
+
+.leave_title h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.leave_title p {
+  color: #6B7280;
+  font-size: 14px;
+}
+
+.request_leave_btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #3B82F6;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.request_leave_btn:hover {
+  background-color: #2563EB;
+}
+
+.leave_types_grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.leave_type_card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.leave_type_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.days_left {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.leave_type_icon {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.sick_leave_icon {
+  background-color: #FEE2E2;
+  color: #DC2626;
+}
+
+.casual_leave_icon {
+  background-color: #DBEAFE;
+  color: #2563EB;
+}
+
+.emergency_leave_icon {
+  background-color: #FEF3C7;
+  color: #D97706;
+}
+
+.leave_type_name {
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.leave_usage {
+  font-size: 14px;
+  color: #6B7280;
+}
+
+.leave_summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.summary_card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary_icon {
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border-radius: 8px;
+  background-color: #F3F4F6;
+}
+
+.summary_content {
+  flex: 1;
+}
+
+.summary_label {
+  font-size: 14px;
+  color: #6B7280;
+  margin-bottom: 4px;
+}
+
+.summary_value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.leave_history {
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.history_header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.history_header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.leave_entry {
+  padding: 16px;
+  border-radius: 10px ;
+  border-bottom: 1px solid #E5E7EB;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.leave_entry:last-child {
+  border-bottom: none;
+}
+
+.leave_entry_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.leave_info h3 {
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.leave_dates {
+  font-size: 14px;
+  color: #6B7280;
+  margin-bottom: 4px;
+}
+
+.leave_reason {
+  color: #6B7280;
+  font-size: 14px;
+}
+
+.leave_status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.status_badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status_approved {
+  background-color: #D1FAE5;
+  color: #065F46;
+}
+
+.status_pending {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.status_rejected {
+  background-color: #FEE2E2;
+  color: #991B1B;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.approved_by {
+  font-size: 12px;
+  color: #059669;
+}
+
+.applied_date {
+  font-size: 12px;
+  color: #6B7280;
+}

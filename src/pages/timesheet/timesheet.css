@@ -1,0 +1,356 @@
+.timesheet_container {
+    padding: 24px;
+}
+
+.timesheet_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.timesheet_title {
+    color: #111827;
+}
+
+.timesheet_title h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.timesheet_title p {
+    color: #6B7280;
+    font-size: 14px;
+}
+
+.new_timesheet_btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #3B82F6;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.new_timesheet_btn:hover {
+    background-color: #2563EB;
+}
+ 
+.stat_icon {
+    display: flex;
+    align-self: center;
+    background-color: #96b1de3e;
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+    justify-content: center;
+    align-items: center;
+}
+.greeen_green{
+    background-color: #80f7aa3e !important;
+}
+
+.btn_log_leave_section{
+    display: flex;
+    justify-content: flex-end !important;
+
+
+}
+.new_time_btn{
+    width: 170px ;
+}
+.time_card_icons{
+    width: 28px;
+    height: 28px;
+}
+.timesheet_stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.stat_card {
+    display: flex;
+    justify-content: space-between;
+    background: white;
+    border-radius: 12px;
+    /* width: 100xp; */
+    /* min-width: 100px ; */
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.stat_label {
+    color: #6B7280;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.stat_value {
+    color: #111827;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.today_timesheet {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.today_timesheet_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.today_timesheet_title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.today_timesheet_actions {
+    display: flex;
+    gap: 8px;
+}
+.header_left{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recent_timesheets {
+    background: none;
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.recent_timesheets_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.timesheet_entry {
+    padding: 16px;
+    background-color: white;
+    border-bottom: 1px solid #E5E7EB;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    
+}
+
+.timesheet_entry:last-child {
+    border-bottom: none;
+}
+
+.entry_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.entry_date {
+    font-weight: 600;
+    color: #111827;
+}
+
+.entry_status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+
+.filter_group{
+    display: flex;
+    gap:10px;
+    background-color: rgb(236, 236, 236);
+    /* padding: 5px; */
+    border-radius: 7px;
+
+}
+
+.filter_date{
+    padding: 5px;
+    border-radius: 7px;
+}
+.task_bubbles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.task_bubble {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #f0f7ff;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.task_text {
+    color: #1e40af;
+    font-weight: 500;
+}
+
+.entry_tasks{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.task_duration {
+    /* color: #3b82f6; */
+    font-weight: 600;
+    padding-left: 8px;
+    border-left: 1px solid #93c5fd;
+}
+
+.filter_btn{
+    padding: 10px;
+    border-radius: 7px;
+  z-index: 10;
+
+
+}
+.filter_group {
+  display: flex;
+  gap: 10px;
+  background-color: #f3f4f6; /* light gray */
+  padding: 5px;
+  border-radius: 12px;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.filter_btn {
+  flex: 1;
+  background-color: transparent;
+  color: #374151; /* neutral gray text */
+  padding: 7px 18px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter_btn:hover {
+  background-color: #e5e7eb; /* slightly darker gray */
+}
+
+.filter_btn.active {
+  background-color: #ffffff; /* active white background */
+  color: #2563eb; /* blue text */
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2); /* subtle shadow */
+  transform: translateY(-1px);
+}
+
+.filter_btn:not(.active):hover {
+  color: #2563eb;
+  background-color: #f9fafb;
+}
+
+
+.status_indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status_approved {
+    background-color: #D1FAE5;
+    color: #065F46;
+}
+
+.status_submitted {
+    background-color: #DBEAFE;
+    color: #1E40AF;
+}
+
+.status_draft {
+    background-color: #F3F4F6;
+    color: #374151;
+}
+
+.entry_details {
+    display: flex;
+    gap: 16px;
+    color: #6B7280;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.entry_note {
+    color: #6B7280;
+    font-size: 14px;
+}
+
+.entry_actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action_icon {
+    padding: 4px;
+    border-radius: 4px;
+    color: #6B7280;
+    transition: background-color 0.2s;
+}
+
+.action_icon:hover {
+    background-color: #F3F4F6;
+    color: #374151;
+}
+
+.no_timesheet {
+    text-align: center;
+    padding: 32px;
+    color: #6B7280;
+}
+
+/* Tooltip styles */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltip_text {
+    visibility: hidden;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #374151;
+    color: white;
+    text-align: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.tooltip:hover .tooltip_text {
+    visibility: visible;
+}
