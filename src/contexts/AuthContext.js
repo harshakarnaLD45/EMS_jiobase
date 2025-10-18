@@ -20,9 +20,13 @@ export function AuthProvider({ children }) {
                     const parsedUser = JSON.parse(savedUser);
                     console.log('📱 Found saved user in localStorage:', parsedUser);
                     setUser(parsedUser);
+                    
+                    // Set loading to false early if we have a saved user
+                    // This prevents the logout redirect while we verify with Supabase
+                    setLoading(false);
                 }
 
-                // Then check Supabase auth
+                // Then check Supabase auth (but don't block on it if we have savedUser)
                 const currentUser = await authApi.getCurrentUser();
                 console.log('🔍 Supabase current user:', currentUser);
                 
@@ -54,6 +58,11 @@ export function AuthProvider({ children }) {
                     // No Supabase user and no saved user
                     console.log('❌ No authenticated user found');
                     setUser(null);
+                    setLoading(false);
+                } else {
+                    // We have savedUser but no Supabase session
+                    // Keep the saved user but log the discrepancy
+                    console.log('⚠️ Have localStorage user but no Supabase session - keeping user logged in');
                 }
             } catch (error) {
                 console.error('❌ Auth initialization error:', error);
@@ -62,8 +71,11 @@ export function AuthProvider({ children }) {
                 if (savedUser) {
                     console.log('🔄 Falling back to localStorage user');
                     setUser(JSON.parse(savedUser));
+                } else {
+                    setUser(null);
                 }
             } finally {
+                // Only set loading to false if we haven't already done so
                 setLoading(false);
                 console.log('✅ Auth initialization complete');
             }
@@ -100,10 +112,18 @@ export function AuthProvider({ children }) {
                     localStorage.setItem('user', JSON.stringify(userData));
                 }
             } else {
-                console.log('❌ Session ended, clearing user data');
-                setSupabaseUser(null);
-                setUser(null);
-                localStorage.removeItem('user');
+                // Check if we should clear user data or keep localStorage user
+                const savedUser = localStorage.getItem('user');
+                if (event === 'SIGNED_OUT' || !savedUser) {
+                    console.log('❌ Session ended, clearing user data');
+                    setSupabaseUser(null);
+                    setUser(null);
+                    localStorage.removeItem('user');
+                } else {
+                    console.log('⚠️ Supabase session lost but keeping localStorage user');
+                    setSupabaseUser(null);
+                    // Keep the user from localStorage
+                }
             }
         });
 
