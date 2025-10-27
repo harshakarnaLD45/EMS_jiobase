@@ -10,6 +10,7 @@ import Login from './pages/login/Login.jsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LeaveProvider } from './contexts/LeaveContext';
 import { EmployeeProvider } from './contexts/EmployeeContext';
+import Attendance from './pages/attendencepage/attendencepage.js';
 
 // Component to handle default routing based on user type
 const DefaultRedirect = () => {
@@ -64,6 +65,7 @@ function App() {
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="timesheet" element={<Timesheet />} />
                 <Route path="leave" element={<Leave />} />
+                <Route path="attendance" element={<Attendance />} />
                 
                 {/* Admin-only routes */}
                 <Route path="admin" element={

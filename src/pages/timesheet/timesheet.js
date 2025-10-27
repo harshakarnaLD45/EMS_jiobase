@@ -5,16 +5,20 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { CircleCheckBig } from '../../components/custom_icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { timesheetApi, employeeApi } from '../../utils/supabase';
+import CustomCalendar from '../../components/common/calender/CustomCalendar';
+import '../../components/common/calender/CustomCalendar.css';
 
 import { TimesheetForm } from '../../components';
 const Timesheet = () => {
     const [timesheetDialogOpen, setTimesheetDialogOpen] = useState(false);
+    const [calendarVisible, setCalendarVisible] = useState(false);
     const [filters, setFilters] = useState({
         status: 'all',
-        filterMode: 'week', // 'all', 'week', or 'month' - default to week
+        filterMode: 'all', // 'all', 'week', 'month', or 'custom'
         startDate: '',
         endDate: '',
-        search: ''
+        search: '',
+        employee: 'all' // For admin view - filter by employee
     });
     const [timesheets, setTimesheets] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -26,7 +30,7 @@ const Timesheet = () => {
         pending: 0,
         todayHours: '0h'
     });
-    const { user } = useAuth();
+    const { user, isEmployee, isAdmin } = useAuth();
     const [employee, setEmployee] = useState(null);
 
     // Load timesheets from database
@@ -40,29 +44,40 @@ const Timesheet = () => {
                 return;
             }
 
-            // Get employee data first
-            let employeeData = null;
-            try {
-                employeeData = await employeeApi.getEmployeeByUser(user);
-                setEmployee(employeeData);
-                console.log('✅ Employee data loaded:', employeeData);
-            } catch (empError) {
-                console.log('⚠️ Could not load employee data:', empError.message);
-                // Continue with user ID if employee lookup fails
+            let timesheetData = [];
+
+            // Check if admin - load all timesheets, if employee - load only their timesheets
+            if (isAdmin()) {
+                console.log('👑 Admin view: Loading ALL employee timesheets');
+                timesheetData = await timesheetApi.getAllTimesheets();
+                console.log('✅ All timesheets loaded for admin:', timesheetData.length);
+            } else {
+                console.log('👤 Employee view: Loading individual timesheets');
+                
+                // Get employee data first
+                let employeeData = null;
+                try {
+                    employeeData = await employeeApi.getEmployeeByUser(user);
+                    setEmployee(employeeData);
+                    console.log('✅ Employee data loaded:', employeeData);
+                } catch (empError) {
+                    console.log('⚠️ Could not load employee data:', empError.message);
+                    // Continue with user ID if employee lookup fails
+                }
+
+                // Get employee ID for timesheet lookup
+                const employeeId = employeeData?.employee_id || employeeData?.id || user.employee_id || user.id;
+
+                if (!employeeId) {
+                    throw new Error('Could not determine employee ID for timesheet lookup');
+                }
+
+                console.log('🔍 Loading timesheets for employee ID:', employeeId);
+
+                // Load timesheets using the API
+                timesheetData = await timesheetApi.getTimesheetsByEmployeeId(employeeId);
             }
 
-            // Get employee ID for timesheet lookup
-            const employeeId = employeeData?.employee_id || employeeData?.id || user.employee_id || user.id;
-            
-            if (!employeeId) {
-                throw new Error('Could not determine employee ID for timesheet lookup');
-            }
-
-            console.log('🔍 Loading timesheets for employee ID:', employeeId);
-
-            // Load timesheets using the API
-            const timesheetData = await timesheetApi.getTimesheetsByEmployeeId(employeeId);
-            
             // Transform data to match component format
             const transformedTimesheets = timesheetData.map(timesheet => {
                 // Parse tasks from database format
@@ -102,13 +117,14 @@ const Timesheet = () => {
                     note: timesheet.note || 'No notes',
                     status: timesheet.status || 'draft',
                     created_at: timesheet.created_at,
-                    raw_date: timesheet.date
+                    raw_date: timesheet.date,
+                    employee_name: timesheet.employee_name || null // For admin view
                 };
             });
 
             setTimesheets(transformedTimesheets);
             calculateStats(transformedTimesheets);
-            
+
             console.log('✅ Timesheets loaded successfully:', transformedTimesheets.length);
             console.log('📋 Sample timesheet data:', transformedTimesheets[0]);
 
@@ -132,13 +148,13 @@ const Timesheet = () => {
         const todayHours = todayTimesheets.reduce((sum, ts) => sum + (ts.hoursWorked || 0), 0);
 
         // Calculate weekly hours (approved only)
-        const weeklyTimesheets = timesheetData.filter(ts => 
+        const weeklyTimesheets = timesheetData.filter(ts =>
             ts.raw_date >= weekAgo && ts.status === 'approved'
         );
         const weeklyHours = weeklyTimesheets.reduce((sum, ts) => sum + (ts.hoursWorked || 0), 0);
 
         // Calculate monthly hours (approved only)
-        const monthlyTimesheets = timesheetData.filter(ts => 
+        const monthlyTimesheets = timesheetData.filter(ts =>
             ts.raw_date >= monthAgo && ts.status === 'approved'
         );
         const monthlyHours = monthlyTimesheets.reduce((sum, ts) => sum + (ts.hoursWorked || 0), 0);
@@ -161,7 +177,21 @@ const Timesheet = () => {
         loadTimesheets();
     }, [user]);
 
-  
+    // Close calendar when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (calendarVisible && !event.target.closest('.filter_section')) {
+                setCalendarVisible(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [calendarVisible]);
+
+
     const StatusBadge = ({ status }) => {
         const getStatusStyles = () => {
             switch (status.toLowerCase()) {
@@ -242,12 +272,17 @@ const Timesheet = () => {
             return false;
         }
 
+        // Employee filter (admin only)
+        if (isAdmin() && filters.employee !== 'all' && timesheet.employee_name !== filters.employee) {
+            return false;
+        }
+
         // Date range filter based on filter mode
         if (filters.filterMode === 'week') {
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
             const timesheetDate = new Date(timesheet.raw_date || timesheet.date);
-            
+
             if (timesheetDate < weekAgo) {
                 return false;
             }
@@ -255,7 +290,7 @@ const Timesheet = () => {
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
             const timesheetDate = new Date(timesheet.raw_date || timesheet.date);
-            
+
             if (timesheetDate < monthAgo) {
                 return false;
             }
@@ -293,7 +328,7 @@ const Timesheet = () => {
 
     const handleFilterChange = (field, value) => {
         console.log('🔄 Filter change:', field, '=', value);
-        
+
         setFilters(prev => ({
             ...prev,
             [field]: value
@@ -306,7 +341,12 @@ const Timesheet = () => {
             <div className="timesheet_header">
                 <div className="timesheet_title">
                     <h1 className='bodyMediumText2'>Timesheets</h1>
-                    <p className=' bodyRegularText4'>Track your working hours and manage timesheets</p>
+                    <p className=' bodyRegularText4'>
+                        {isAdmin() 
+                            ? 'View and manage all employee timesheets' 
+                            : 'Track your working hours and manage timesheets'
+                        }
+                    </p>
                 </div>
                 <div className="btn_log_leave_section ">
                     <Dialog.Root open={timesheetDialogOpen} onOpenChange={setTimesheetDialogOpen}>
@@ -346,7 +386,7 @@ const Timesheet = () => {
             {error && (
                 <div className="error-state" style={{ padding: '1rem', backgroundColor: '#fee', border: '1px solid #fcc', borderRadius: '8px', margin: '1rem 0' }}>
                     <p style={{ color: '#c33' }}>Error: {error}</p>
-                    <button 
+                    <button
                         onClick={loadTimesheets}
                         style={{ marginTop: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
                     >
@@ -355,8 +395,8 @@ const Timesheet = () => {
                 </div>
             )}
 
-            {/* Stats */}
-            {!loading && !error && (
+            {/* Stats - Show only to employees */}
+            {!loading && !error && isEmployee() && (
                 <div className="timesheet_stats">
                     <div className="stat_card">
                         <div>
@@ -366,7 +406,7 @@ const Timesheet = () => {
                         <div className="stat_icon"><Clock className="time_card_icons w-5 h-5 text-blue-500" /></div>
                     </div>
 
-                  
+
                     <div className="stat_card">
                         <div>
                             <div className="stat_label bodyRegularText4">Approved</div>
@@ -389,60 +429,156 @@ const Timesheet = () => {
                 </div>
             )}
 
-            
-
             {/* Recent Timesheets */}
             <div className="recent_timesheets">
                 <div className="recent_timesheets_header">
                     <div className="header_left">
                         <Calendar className="w-5 h-5 text-blue-500" />
-                        <h2 className="bodyMediumText2">Recent Timesheets</h2>
+                        <h2 className="bodyMediumText2">
+                            {isAdmin() ? 'All Employee Timesheets' : 'Recent Timesheets'}
+                        </h2>
                     </div>
                     <div className="filter_section">
                         <div className="filter_group">
-                           
+                            {/* Employee Filter - Admin Only */}
+                            {isAdmin() && (
+                                <select 
+                                    value={filters.employee}
+                                    onChange={(e) => handleFilterChange('employee', e.target.value)}
+                                    className="employee_filter bodyMediumText4"
+                                    style={{
+                                        padding: '8px 12px',
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: '6px',
+                                        backgroundColor: 'white',
+                                        fontSize: '14px',
+                                        color: '#333',
+                                        marginRight: '10px'
+                                    }}
+                                >
+                                    <option value="all">All Employees</option>
+                                    {/* Get unique employee names from timesheets */}
+                                    {Array.from(new Set(timesheets.map(ts => ts.employee_name).filter(Boolean)))
+                                        .sort()
+                                        .map(employeeName => (
+                                            <option key={employeeName} value={employeeName}>
+                                                {employeeName}
+                                            </option>
+                                        ))
+                                    }
+                                </select>
+                            )}
+                            
+                            {/* Quick Filter Buttons */}
                             <button  
                                 className={`bodyMediumText4 filter_btn ${filters.filterMode === 'week' ? 'active' : ''}`}
-                                onClick={() => handleFilterChange('filterMode', 'week')}
+                                onClick={() => {
+                                    handleFilterChange('filterMode', 'week');
+                                    handleFilterChange('startDate', '');
+                                    handleFilterChange('endDate', '');
+                                    setCalendarVisible(false);
+                                }}
                             >
-                                 Week
+                                Week
                             </button>
                             <button 
                                 className={`bodyMediumText4 filter_btn ${filters.filterMode === 'month' ? 'active' : ''}`}
-                                onClick={() => handleFilterChange('filterMode', 'month')}
+                                onClick={() => {
+                                    handleFilterChange('filterMode', 'month');
+                                    handleFilterChange('startDate', '');
+                                    handleFilterChange('endDate', '');
+                                    setCalendarVisible(false);
+                                }}
                             >
-                                 Month
+                                Month
                             </button>
+                            <button 
+                                className={`bodyMediumText4 filter_btn ${filters.filterMode === 'all' ? 'active' : ''}`}
+                                onClick={() => {
+                                    handleFilterChange('filterMode', 'all');
+                                    handleFilterChange('startDate', '');
+                                    handleFilterChange('endDate', '');
+                                    setCalendarVisible(false);
+                                }}
+                            >
+                                All
+                            </button>
+                            
+                            <button 
+                                className={`calendar-trigger-btn ${calendarVisible ? 'active' : ''}`}
+                                onClick={() => setCalendarVisible(!calendarVisible)}
+                                title="Custom Date Range"
+                            >
+                                <Calendar className="w-5 h-5 text-blue-500" />
+                            </button>
+                            
+                            {/* Custom Calendar - Show/Hide based on state */}
+                            {calendarVisible && (
+                                <CustomCalendar
+                                    selectedRange={{
+                                        from: filters.startDate ? new Date(filters.startDate) : null,
+                                        to: filters.endDate ? new Date(filters.endDate) : null
+                                    }}
+                                    onDateRangeSelect={(range) => {
+                                        if (range?.from && range?.to) {
+                                            // Convert dates to YYYY-MM-DD format
+                                            const startDate = range.from.toISOString().split('T')[0];
+                                            const endDate = range.to.toISOString().split('T')[0];
+                                            
+                                            handleFilterChange('startDate', startDate);
+                                            handleFilterChange('endDate', endDate);
+                                            handleFilterChange('filterMode', 'custom');
+                                        } else if (!range?.from && !range?.to) {
+                                            // Clear date filters
+                                            handleFilterChange('startDate', '');
+                                            handleFilterChange('endDate', '');
+                                            handleFilterChange('filterMode', 'all');
+                                        }
+                                    }}
+                                    onClose={() => setCalendarVisible(false)}
+                                />
+                            )}
                         </div>
-                      
                     </div>
                 </div>
 
                 {/* Empty State */}
                 {!loading && !error && filteredTimesheets.length === 0 && (
-                    <div className="empty-state" style={{ 
-                        padding: '3rem 2rem', 
-                        textAlign: 'center', 
-                        border: '2px dashed #e0e0e0', 
+                    <div className="empty-state" style={{
+                        padding: '3rem 2rem',
+                        textAlign: 'center',
+                        border: '2px dashed #e0e0e0',
                         borderRadius: '8px',
                         backgroundColor: '#fafafa'
                     }}>
                         <Clock className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                         <h3 style={{ marginBottom: '0.5rem', color: '#666' }}>No Timesheets Found</h3>
                         <p style={{ color: '#888', marginBottom: '1.5rem' }}>
-                            {timesheets.length === 0 
-                                ? "You haven't logged any timesheets yet." 
+                            {timesheets.length === 0
+                                ? (isAdmin() ? "No employee timesheets have been submitted yet." : "You haven't logged any timesheets yet.")
                                 : `No timesheets found for the selected ${filters.filterMode} filter.`
                             }
                         </p>
-                       
+
                     </div>
                 )}
 
                 {filteredTimesheets.map((timesheet) => (
                     <div key={timesheet.id} className="timesheet_entry">
-                        <div className="entry_header" style={{margin:'0'}}>
-                            <span className="entry_date bodyMediumText3">{timesheet.date}</span>
+                        <div className="entry_header" style={{ margin: '0' }}>
+                            <div className="entry_date_section">
+                                <span className="entry_date bodyMediumText3">{timesheet.date}</span>
+                                {/* Show employee name for admin view */}
+                                {isAdmin() && timesheet.employee_name && (
+                                    <span className="employee_name bodyRegularText5" style={{ 
+                                        color: '#666', 
+                                        fontSize: '0.85rem',
+                                        fontStyle: 'italic' 
+                                    }}>
+                                        by {timesheet.employee_name}
+                                    </span>
+                                )}
+                            </div>
                             <div className="entry_status bodyMediumText3">
                                 <StatusBadge status={timesheet.status} />
                                 <div className="entry_actions">
@@ -450,7 +586,7 @@ const Timesheet = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="entry_details" style={{margin:'0'}}>
+                        <div className="entry_details" style={{ margin: '0' }}>
                             <span className='bodyRegularText4'>Hours: {timesheet.hours}</span>
 
                         </div>
@@ -475,11 +611,11 @@ const Timesheet = () => {
 
                         {/* Show note if available */}
                         {timesheet.note && timesheet.note !== 'No notes' && (
-                            <div className="entry_note" style={{ 
-                                marginTop: '0.5rem', 
-                                fontSize: '0.9rem', 
+                            <div className="entry_note" style={{
+                                marginTop: '0.5rem',
+                                fontSize: '0.9rem',
                                 color: '#666',
-                                fontStyle: 'italic' 
+                                fontStyle: 'italic'
                             }}>
                                 Note: {timesheet.note}
                             </div>

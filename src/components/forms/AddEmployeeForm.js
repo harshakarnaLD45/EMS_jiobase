@@ -1,9 +1,28 @@
 import React, { useState } from 'react';
+import {
+    Box,
+    TextField,
+    Button,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Typography,
+    Stack,
+    IconButton,
+    InputAdornment,
+    Divider
+} from '@mui/material';
+import { Visibility, VisibilityOff, AutoFixHigh } from '@mui/icons-material';
 import { useEmployees } from '../../contexts/EmployeeContext';
+
+import '../../pages/attendencepage/attendence.css';
+
 
 const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
     const [formData, setFormData] = useState({
-        fullName: '',
+        firstName: '',
+        lastName: '',
         email: '',
         phone: '',
         department: '',
@@ -13,9 +32,9 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const { addEmployee } = useEmployees();
+    const { addEmployee, getPositionOptions } = useEmployees();
 
-    const departments = ['Engineering', 'Marketing', 'HR', 'Sales', 'Finance', 'Operations'];
+    const departments = ['Administration', 'Development', 'Design', 'Interns'];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -23,7 +42,9 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
 
         try {
             const newEmployee = {
-                name: formData.fullName,
+                first_name: formData.firstName,
+                last_name: formData.lastName,
+                name: `${formData.firstName} ${formData.lastName}`.trim(), // Full name for compatibility
                 email: formData.email,
                 phone: formData.phone,
                 department: formData.department,
@@ -37,12 +58,13 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
             onClose();
             
             if (onSuccess) {
-                onSuccess(`Employee ${formData.fullName} has been added successfully!`);
+                onSuccess(`Employee ${formData.firstName} ${formData.lastName} has been added successfully!`);
             }
 
             // Reset form
             setFormData({
-                fullName: '',
+                firstName: '',
+                lastName: '',
                 email: '',
                 phone: '',
                 department: '',
@@ -61,10 +83,19 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
     };
 
     const handleInputChange = (field, value) => {
-        setFormData(prev => ({
-            ...prev,
-            [field]: value
-        }));
+        setFormData(prev => {
+            const newData = {
+                ...prev,
+                [field]: value
+            };
+            
+            // Reset position when department changes
+            if (field === 'department') {
+                newData.position = '';
+            }
+            
+            return newData;
+        });
     };
 
     const generatePassword = () => {
@@ -78,154 +109,217 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="add-employee-form" style={{padding:"20px, "}}>
-            <h2>Add New Employee</h2>
-            <p>Enter the employee details below. All fields are required.</p>
+        <Box component="form" onSubmit={handleSubmit} sx={{ p: 3, maxWidth: 600, width: '100%' }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+                Add New Employee
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Enter the employee details below. All fields are required.
+            </Typography>
 
-            <div className="form-group">
-                <label>Full Name *</label>
-                <input
-                    type="text"
-                    required
-                    value={formData.fullName}
-                    onChange={(e) => handleInputChange('fullName', e.target.value)}
-                    placeholder="Enter full name"
-                />
-            </div>
+            <Stack spacing={3}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <TextField
+                        fullWidth
+                        label="First Name"
+                        required
+                        value={formData.firstName}
+                        onChange={(e) => handleInputChange('firstName', e.target.value)}
+                        placeholder="Enter first name"
+                    />
+                    <TextField
+                        fullWidth
+                        label="Last Name"
+                        required
+                        value={formData.lastName}
+                        onChange={(e) => handleInputChange('lastName', e.target.value)}
+                        placeholder="Enter last name"
+                    />
+                </Stack>
 
-            <div className="form-group">
-                <label>Email *</label>
-                <input
+                <TextField
+                    fullWidth
+                    label="Email"
                     type="email"
                     required
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     placeholder="Enter email address"
                 />
-            </div>
 
-            <div className="form-group">
-                <label>Phone</label>
-                <input
+                <TextField
+                    fullWidth
+                    label="Phone"
                     type="tel"
+                    required
                     value={formData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
                     placeholder="Enter phone number"
                 />
-            </div>
 
-            <div className="form-group">
-                <label>Department *</label>
-                <select
-                    required
-                    value={formData.department}
-                    onChange={(e) => handleInputChange('department', e.target.value)}
-                >
-                    <option value="">Select department</option>
-                    {departments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                </select>
-            </div>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <FormControl fullWidth required>
+                        <InputLabel id="department-label">Department</InputLabel>
+                        <Select
+                            labelId="department-label"
+                            id="department-select"
+                            value={formData.department}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                console.log('Department selected:', value);
+                                setFormData(prev => ({
+                                    ...prev,
+                                    department: value,
+                                    position: '' // Reset position when department changes
+                                }));
+                            }}
+                            label="Department"
+                            MenuProps={{
+                                disablePortal: true,
+                                disableScrollLock: true,
+                                anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                                transformOrigin: { vertical: 'top', horizontal: 'left' },
+                                // PaperProps: {
+                                //     sx: { zIndex: 1600 },
+                                //     style: { height: "auto" },
+                                // },
+                            }}
+                        >
+                            <MenuItem value="" disabled>
+                                Select department
+                            </MenuItem>
+                            {departments.map(dept => (
+                                <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
 
-            <div className="form-group">
-                <label>Position *</label>
-                <input
-                    type="text"
-                    required
-                    value={formData.position}
-                    onChange={(e) => handleInputChange('position', e.target.value)}
-                    placeholder="Enter position/title"
-                />
-            </div>
+                    <FormControl fullWidth required disabled={!formData.department}>
+                        <InputLabel id="position-label">Position</InputLabel>
+                        <Select
+                            labelId="position-label"
+                            id="position-select"
+                            value={formData.position}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                console.log('Position selected:', value);
+                                setFormData(prev => ({
+                                    ...prev,
+                                    position: value
+                                }));
+                            }}
+                            label="Position"
+                            MenuProps={{
+                                disablePortal: true,
+                                disableScrollLock: true,
+                                anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                                transformOrigin: { vertical: 'top', horizontal: 'left' },
+                                PaperProps: {
+                                    sx: { zIndex: 1600 },
+                                    style: { maxHeight: 300 },
+                                },
+                            }}
+                        >
+                            <MenuItem value="" disabled>
+                                {formData.department ? 'Select position' : 'Select department first'}
+                            </MenuItem>
+                            {getPositionOptions(formData.department).map(position => (
+                                <MenuItem key={position} value={position}>{position}</MenuItem>
+                            ))}
+                        </Select>
+                        {!formData.department && (
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                                Please select a department first
+                            </Typography>
+                        )}
+                    </FormControl>
+                </Stack>
 
-            <div className="form-group">
-                <label>Join Date *</label>
-                <input
+                <TextField
+                    fullWidth
+                    label="Join Date"
                     type="date"
                     required
                     value={formData.joinDate}
                     onChange={(e) => handleInputChange('joinDate', e.target.value)}
-                    max={new Date().toISOString().split('T')[0]} // Prevent future dates
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{
+                        max: new Date().toISOString().split('T')[0],
+                        onFocus: (e) => {
+                            if (e.currentTarget?.showPicker) {
+                                // Some browsers allow showPicker on focus when initiated by user
+                                try { e.currentTarget.showPicker(); } catch (_) {}
+                            }
+                        },
+                        onMouseDown: (e) => {
+                            // Guarantee a user gesture and open native picker
+                            if (e.currentTarget?.showPicker) {
+                                e.preventDefault();
+                                try { e.currentTarget.showPicker(); } catch (_) {}
+                            }
+                        }
+                    }}
+                    
                 />
-            </div>
-            <div className="form-group">
-                <label>Password *</label>
-                <div className="password-input-group" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                        <input
-                            type={showPassword ? "text" : "password"}
-                            required
-                            value={formData.password}
-                            onChange={(e) => handleInputChange('password', e.target.value)}
-                            placeholder="Enter temporary password"
-                            minLength="8"
-                            maxLength="15"
-                            style={{ 
-                                width: '100%',
-                                paddingRight: '40px' // Make room for the eye icon
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            style={{
-                                position: 'absolute',
-                                right: '8px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                color: '#6b7280',
-                                fontSize: '16px'
-                            }}
-                            title={showPassword ? "Hide password" : "Show password"}
-                        >
-                            {showPassword ? '🙈' : '👁️'}
-                        </button>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={generatePassword}
-                        className="generate-password-btn"
-                        style={{
-                            padding: '8px 12px',
-                            fontSize: '12px',
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap'
+
+                <Box>
+                    <TextField
+                        fullWidth
+                        label="Password"
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={formData.password}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
+                        placeholder="Enter temporary password"
+                        inputProps={{ minLength: 8, maxLength: 15 }}
+                        InputProps={{
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        edge="end"
+                                        size="small"
+                                    >
+                                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                                    </IconButton>
+                                    <Button
+                                        onClick={generatePassword}
+                                        size="small"
+                                        variant="contained"
+                                        startIcon={<AutoFixHigh />}
+                                        sx={{ ml: 1, minWidth: 'auto' }}
+                                    >
+                                        Generate
+                                    </Button>
+                                </InputAdornment>
+                            ),
                         }}
-                        title="Generate random password"
+                        helperText="Minimum 8 characters. Employee can change this after first login."
+                    />
+                </Box>
+
+                <Divider />
+
+                <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    <Button
+                        variant="outlined"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        size="large"
                     >
-                        Generate
-                    </button>
-                </div>
-                <small className="form-help" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', display: 'block' }}>
-                    Minimum 6 characters. Employee can change this after first login.
-                </small>
-            </div>            <div className="form-actions">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="cancel-btn"
-                    disabled={isSubmitting}
-                >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    className="submit-btn"
-                    disabled={isSubmitting}
-                >
-                    {isSubmitting ? 'Adding Employee...' : 'Add Employee'}
-                </button>
-            </div>
-        </form>
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={isSubmitting}
+                        size="large"
+                    >
+                        {isSubmitting ? 'Adding Employee...' : 'Add Employee'}
+                    </Button>
+                </Stack>
+            </Stack>
+        </Box>
     );
 };
 

@@ -1,5 +1,22 @@
 import React from 'react';
-import { Edit, Trash } from 'lucide-react';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    IconButton,
+    Chip,
+    Stack,
+    Typography,
+    Box
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EmailIcon from '@mui/icons-material/Email';
+import PhoneIcon from '@mui/icons-material/Phone';
 
 const EmployeeTable = ({ 
     employees = [], 
@@ -21,96 +38,116 @@ const EmployeeTable = ({
         return phone;
     };
 
+    const getStatusColor = (status) => {
+        status = (status || 'active').toLowerCase();
+        switch (status) {
+            case 'active':
+                return 'success';
+            case 'inactive':
+                return 'error';
+            case 'on leave':
+                return 'warning';
+            default:
+                return 'default';
+        }
+    };
+
     if (employees.length === 0) {
         return (
-            <div className="empty-state" style={{
-                textAlign: 'center',
-                padding: '3rem',
-                color: '#6b7280'
-            }}>
-                <h3 className="bodyMediumText3">No employees found</h3>
-                <p className="bodyRegularText4">No employees found for the selected department</p>
-            </div>
+            <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                <Typography variant="h6">No employees found</Typography>
+                <Typography variant="body2">No employees found for the selected department</Typography>
+            </Box>
         );
     }
 
     return (
-        <div className="employees-table">
-            <div className="table-header">
-                <span className="col-name bodyRegularText4">Name</span>
-                <span className="col-contact bodyRegularText4">Contact</span>
-                <span className="col-department bodyRegularText4">Department</span>
-                <span className="col-position bodyRegularText4">Position</span>
-                <span className="col-status bodyRegularText4">Status</span>
-                <span className="col-date bodyRegularText4">Join Date</span>
-                {showActions && <span className="col-actions bodyRegularText4">Actions</span>}
-            </div>
-
-            <div className="table-body">
-                {employees.map(employee => (
-                    <div key={employee.id} className="table-row">
-                        <span className="col-name">
-                            <div className="employee-name bodyRegularText4">
-                                {employee.name || 'N/A'}
-                            </div>
-                        </span>
-                        
-                        <span className="col-contact">
-                            <div className="contact-info">
-                                <div className="email bodyRegularText4">{employee.email || 'N/A'}</div>
-                                <div className="phone bodyRegularText4">{formatPhone(employee.phone)}</div>
-                            </div>
-                        </span>
-                        
-                        <span className="col-department">
-                            <div className="department-badge bodyRegularText4">
+        <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+            <Table sx={{ minWidth: 650 }} aria-label="employee table">
+                <TableHead>
+                    <TableRow>
+                        <TableCell>Join Date</TableCell>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Contact</TableCell>
+                        <TableCell>Department</TableCell>
+                        <TableCell>Position</TableCell>
+                        <TableCell>Status</TableCell>
+                         <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {employees.map(employee => (
+                        <TableRow
+                            key={employee.id}
+                            sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                        >
+                            <TableCell>{formatDate(employee.joinDate || employee.join_date)}</TableCell>
+                            <TableCell>
+                                <Typography variant="body2">
+                                    {employee.name || 'N/A'}
+                                </Typography>
+                            </TableCell>
+                            <TableCell>
+                                <Stack spacing={1}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <EmailIcon fontSize="small" color="action" />
+                                        <Typography variant="body2">{employee.email || 'N/A'}</Typography>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <PhoneIcon fontSize="small" color="action" />
+                                        <Typography variant="body2">{formatPhone(employee.phone)}</Typography>
+                                    </Box>
+                                </Stack>
+                            </TableCell>
+                            <TableCell>
                                 {employee.department || 'N/A'}
-                            </div>
-                        </span>
-                        
-                        <span className="col-position bodyRegularText4">
-                            {employee.position || 'N/A'}
-                        </span>
-                        
-                        <span className="col-status">
-                            <span className={`bodyRegularText4 status-badge ${(employee.status || 'active').toLowerCase()}`}>
-                                {employee.status || 'Active'}
-                            </span>
-                        </span>
-                        
-                        <span className="col-date bodyRegularText4">
-                            {formatDate(employee.joinDate || employee.join_date)}
-                        </span>
-                        
-                        {showActions && (
-                            <span className="col-actions">
-                                <div className="action-buttons">
-                                    {onEdit && (
-                                        <button 
-                                            className="action-btn edit"
-                                            onClick={() => onEdit(employee)}
-                                            title="Edit Employee"
-                                        >
-                                            <Edit size={16} />
-                                        </button>
-                                    )}
-                                    {onDelete && (
-                                        <button 
-                                            className="action-btn delete"
-                                            onClick={() => onDelete(employee)}
-                                            title="Delete Employee"
-                                        >
-                                            <Trash size={16} />
-                                        </button>
-                                    )}
-                                </div>
-                            </span>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
+                                {/* <Chip
+                                    label={employee.department || 'N/A'}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                /> */}
+                            </TableCell>
+                            <TableCell>{employee.position || 'N/A'}</TableCell>
+                            <TableCell>
+                                <Chip
+                                    label={employee.status || 'Active'}
+                                    size="small"
+                                    color={getStatusColor(employee.status)}
+                                />
+                            </TableCell>
+                            {/* {showActions && ( */}
+                                <TableCell align="right">
+                                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                        {/* {onEdit && ( */}
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => onEdit(employee)}
+                                                color="primary"
+                                                title="Edit Employee"
+                                            >
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        {/* )} */}
+                                        {/* {onDelete && ( */}
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => onDelete(employee)}
+                                                color="error"
+                                                title="Delete Employee"
+                                            >
+                                                <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                        {/* )} */}
+                                    </Stack>
+                                </TableCell>
+                            {/* )} */}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
     );
 };
 
-export default EmployeeTable;
+export default React.memo(EmployeeTable);

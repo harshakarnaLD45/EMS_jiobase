@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Calendar } from 'lucide-react';
+import { X, Calendar, FileText } from 'lucide-react';
 import { useLeave } from '../../contexts/LeaveContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Input, InputAdornment } from '@mui/material';
+import { leaveApi } from '../../utils/supabase';
 
 const styles = {
   container: {
@@ -136,6 +137,44 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem'
+  },
+  fileInputWrapper: {
+    position: 'relative',
+    border: '1px dashed #d1d5db',
+    borderRadius: '0.5rem',
+    padding: '1rem',
+    textAlign: 'center',
+    backgroundColor: '#f9fafb',
+    cursor: 'pointer',
+    transition: 'all 150ms ease'
+  },
+  fileInput: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    top: 0,
+    left: 0,
+    opacity: 0,
+    cursor: 'pointer'
+  },
+  fileInputLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.5rem',
+    color: '#6b7280',
+    fontSize: '0.875rem'
+  },
+  fileName: {
+    marginTop: '0.5rem',
+    fontSize: '0.875rem',
+    color: '#374151',
+    fontWeight: '500'
+  },
+  fileInfo: {
+    fontSize: '0.75rem',
+    color: '#9ca3af',
+    marginTop: '0.25rem'
   }
 };
 
@@ -148,6 +187,7 @@ const LeaveRequestForm = ({ onClose }) => {
     subject: '',
     reason: ''
   });
+  const [documentFile, setDocumentFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { leaveBalance, loading, error, requestLeave } = useLeave();
 
@@ -173,9 +213,70 @@ const LeaveRequestForm = ({ onClose }) => {
     }));
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    
+    if (file) {
+      // Validate file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (file.size > maxSize) {
+        alert('File size must be less than 5MB');
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      
+      // Validate file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/jpg',
+        'image/png'
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please upload a PDF, DOC, DOCX, JPG, or PNG file');
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      
+      console.log('📎 File selected:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+    }
+    
+    setDocumentFile(file);
+  };
+
+  // Calculate number of days between start and end date
+  const calculateLeaveDays = () => {
+    if (!formData.startDate || !formData.endDate) return 0;
+    
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
+  };
+
+  // Check if documentation is required
+  const isDocumentationRequired = () => {
+    return formData.leaveType === 'sick' && calculateLeaveDays() > 1;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    // Validate file upload for sick leave > 1 day
+    if (isDocumentationRequired() && !documentFile) {
+      alert('Please upload supporting documentation for sick leave requests of more than one day.');
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const leaveRequest = {
@@ -187,6 +288,7 @@ const LeaveRequestForm = ({ onClose }) => {
         subject: formData.subject,
         reason: formData.reason,
         status: 'pending',
+        document: documentFile, // Pass the file object directly
         user: user // Pass user data for employee lookup
       };
 
@@ -195,7 +297,7 @@ const LeaveRequestForm = ({ onClose }) => {
       onClose();
     } catch (error) {
       console.error('Error submitting leave request:', error);
-      // You might want to show an error message to the user
+      alert(`Error submitting leave request: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -363,6 +465,50 @@ const LeaveRequestForm = ({ onClose }) => {
             style={styles.textarea}
           />
         </div>
+
+        {/* Document Upload for Sick Leave */}
+        {isDocumentationRequired() && (
+          <div style={styles.formGroup}>
+            <label className='bodyMediumText5' style={styles.label}>
+              Supporting Documentation <span style={styles.required}>*</span>
+            </label>
+            <div style={styles.fileInputWrapper}>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={handleFileChange}
+                style={styles.fileInput}
+              />
+              <label style={styles.fileInputLabel}>
+                <FileText style={{ width: '1.5rem', height: '1.5rem' }} />
+                <span>Click to upload medical certificate or doctor's note</span>
+                <span style={styles.fileInfo}>PDF, DOC, JPG, PNG up to 5MB</span>
+              </label>
+              {documentFile && (
+                <div style={{
+                  ...styles.fileName,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.25rem'
+                }}>
+                  <div style={{ fontWeight: '600', color: '#059669' }}>
+                    ✓ {documentFile.name}
+                  </div>
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: '#6b7280'
+                  }}>
+                    {(documentFile.size / 1024 / 1024).toFixed(2)} MB • {documentFile.type.split('/')[1].toUpperCase()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{...styles.fileInfo, marginTop: '0.5rem'}}>
+              Required for sick leave requests of more than one consecutive day
+            </div>
+          </div>
+        )}
 
         {/* Form Actions */}
         <div style={styles.actions}>

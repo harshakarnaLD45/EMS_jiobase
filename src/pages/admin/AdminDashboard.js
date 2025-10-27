@@ -24,9 +24,9 @@ const AdminDashboard = () => {
         try {
             setLoading(true);
             setError(null);
-            
+
             console.log('🚀 Starting to load dashboard data...');
-            
+
             // Debug database connection first
             try {
                 const debugResult = await adminApi.debugDatabase();
@@ -34,28 +34,28 @@ const AdminDashboard = () => {
             } catch (debugError) {
                 console.error('⚠️ Debug failed:', debugError);
             }
-            
+
             // Fetch employees and admins data directly (same as Employee Management)
             let allStaff, activity, leaveRequests, timesheets;
-            
+
             try {
                 console.log('👥 Fetching all staff (employees + admins)...');
                 allStaff = await adminApi.getAllEmployeesAndAdmins();
                 console.log('✅ Staff data loaded:', allStaff?.length || 0);
                 console.log('📋 Sample staff data:', allStaff?.slice(0, 2));
-                
+
                 if (!allStaff || allStaff.length === 0) {
                     console.warn('⚠️ No staff data returned - checking individual tables...');
-                    
+
                     // Try fetching employees directly
                     const { employeeApi } = await import('../../utils/supabase');
                     const employees = await employeeApi.getEmployees();
                     console.log('📊 Direct employees query:', employees?.length || 0);
-                    
+
                     // Try fetching admins directly
                     const admins = await adminApi.getAdmins();
                     console.log('👑 Direct admins query:', admins?.length || 0);
-                    
+
                     allStaff = [...(employees || []), ...(admins || [])];
                 }
             } catch (staffError) {
@@ -70,12 +70,12 @@ const AdminDashboard = () => {
                 const { data: leaves, error: leaveError } = await supabase
                     .from('leave_requests')
                     .select('*');
-                
+
                 if (leaveError) {
                     console.error('❌ Leave requests error:', leaveError);
                     throw leaveError;
                 }
-                
+
                 leaveRequests = leaves || [];
                 console.log('✅ Leave requests loaded:', leaveRequests.length);
                 console.log('📋 Sample leave request:', leaveRequests[0]);
@@ -91,12 +91,12 @@ const AdminDashboard = () => {
                 const { data: timesheetData, error: timesheetError } = await supabase
                     .from('timesheets')
                     .select('*');
-                
+
                 if (timesheetError) {
                     console.error('❌ Timesheets error:', timesheetError);
                     throw timesheetError;
                 }
-                
+
                 timesheets = timesheetData || [];
                 console.log('✅ Timesheets loaded:', timesheets.length);
                 console.log('📋 Sample timesheet:', timesheets[0]);
@@ -109,88 +109,88 @@ const AdminDashboard = () => {
             // Calculate stats from the fetched data
             const currentMonth = new Date().toISOString().slice(0, 7);
             const today = new Date().toISOString().slice(0, 10);
-            
+
             // Filter data
             const employees = allStaff.filter(staff => staff.role === 'employee' || !staff.isAdmin);
             const admins = allStaff.filter(staff => staff.role === 'admin' || staff.isAdmin);
-            
-            const pendingLeaves = leaveRequests.filter(req => 
+
+            const pendingLeaves = leaveRequests.filter(req =>
                 !req.status || req.status === 'pending' || req.status === null
             );
             const approvedLeaves = leaveRequests.filter(req => req.status === 'approved');
-            const activeLeaves = approvedLeaves.filter(req => 
+            const activeLeaves = approvedLeaves.filter(req =>
                 req.start_date <= today && req.end_date >= today
             );
-            
+
             // Get employee IDs who are currently on leave
             const employeeIdsOnLeave = activeLeaves.map(leave => leave.employee_id || leave.user_id);
-            
+
             // Calculate staff who are active today (not on leave and with active status)
             const activeStaffToday = allStaff.filter(staff => {
                 // Must have active status
-                const hasActiveStatus = !staff.status || 
-                                      staff.status === 'active' || 
-                                      staff.status === 'Active';
-                
+                const hasActiveStatus = !staff.status ||
+                    staff.status === 'active' ||
+                    staff.status === 'Active';
+
                 // Must NOT be on leave today
-                const isNotOnLeave = !employeeIdsOnLeave.includes(staff.id) && 
-                                   !employeeIdsOnLeave.includes(staff.employee_id);
-                
+                const isNotOnLeave = !employeeIdsOnLeave.includes(staff.id) &&
+                    !employeeIdsOnLeave.includes(staff.employee_id);
+
                 return hasActiveStatus && isNotOnLeave;
             });
-            
+
             // Also count people with active status from database (for total active count)
-            const activeStaff = allStaff.filter(staff => 
+            const activeStaff = allStaff.filter(staff =>
                 !staff.status || staff.status === 'active' || staff.status === 'Active'
             );
             // Filter pending timesheets - match database query logic
-            const pendingTimesheets = timesheets.filter(ts => 
+            const pendingTimesheets = timesheets.filter(ts =>
                 !ts.status || ts.status === 'pending' || ts.status === 'submitted' || ts.status === null
             );
-            
-            console.log('🔍 Timesheet status debugging:');
-            console.log('   - Total timesheets fetched:', timesheets.length);
-            console.log('   - All timesheets:', timesheets.map(ts => ({ 
-                id: ts.id, 
-                status: ts.status, 
-                status_type: typeof ts.status,
-                employee_id: ts.employee_id, 
-                date: ts.date,
-                hours: ts.hours 
-            })));
-            console.log('   - Pending timesheets after filter:', pendingTimesheets.length);
-            console.log('   - Pending timesheet details:', pendingTimesheets.map(ts => ({ 
-                id: ts.id, 
-                status: ts.status, 
-                employee_id: ts.employee_id,
-                date: ts.date 
-            })));
-            
-            const newStaffThisMonth = allStaff.filter(staff => 
+
+            // console.log('🔍 Timesheet status debugging:');
+            // console.log('   - Total timesheets fetched:', timesheets.length);
+            // console.log('   - All timesheets:', timesheets.map(ts => ({
+            //     id: ts.id,
+            //     status: ts.status,
+            //     status_type: typeof ts.status,
+            //     employee_id: ts.employee_id,
+            //     date: ts.date,
+            //     hours: ts.hours
+            // })));
+            // console.log('   - Pending timesheets after filter:', pendingTimesheets.length);
+            // console.log('   - Pending timesheet details:', pendingTimesheets.map(ts => ({
+            //     id: ts.id,
+            //     status: ts.status,
+            //     employee_id: ts.employee_id,
+            //     date: ts.date
+            // })));
+
+            const newStaffThisMonth = allStaff.filter(staff =>
                 staff.created_at && staff.created_at.startsWith(currentMonth)
             ).length;
 
-            // Debug the filtering
-            console.log('🔍 Debug filtering results:');
-            console.log('   - All staff:', allStaff?.length || 0);
-            console.log('   - Employees:', employees?.length || 0);
-            console.log('   - Admins:', admins?.length || 0);
-            console.log('   - Active staff (by status):', activeStaff?.length || 0);
-            console.log('   - Staff on leave today:', activeLeaves?.length || 0);
-            console.log('   - Employee IDs on leave:', employeeIdsOnLeave);
-            console.log('   - Active staff today (calculated):', activeStaffToday?.length || 0);
-            console.log('   - Active staff today details:', activeStaffToday?.map(s => ({ 
-                id: s.id, 
-                name: s.name, 
-                status: s.status, 
-                role: s.role 
-            })));
-            console.log('   - Leave requests:', leaveRequests?.length || 0);
-            console.log('   - Pending leaves:', pendingLeaves?.length || 0);
-            console.log('   - Approved leaves:', approvedLeaves?.length || 0);
-            console.log('   - Active leaves today:', activeLeaves?.length || 0);
-            console.log('   - Timesheets:', timesheets?.length || 0);
-            console.log('   - Pending timesheets:', pendingTimesheets?.length || 0);
+            // // Debug the filtering
+            // console.log('🔍 Debug filtering results:');
+            // console.log('   - All staff:', allStaff?.length || 0);
+            // console.log('   - Employees:', employees?.length || 0);
+            // console.log('   - Admins:', admins?.length || 0);
+            // console.log('   - Active staff (by status):', activeStaff?.length || 0);
+            // console.log('   - Staff on leave today:', activeLeaves?.length || 0);
+            // console.log('   - Employee IDs on leave:', employeeIdsOnLeave);
+            // console.log('   - Active staff today (calculated):', activeStaffToday?.length || 0);
+            // console.log('   - Active staff today details:', activeStaffToday?.map(s => ({
+            //     id: s.id,
+            //     name: s.name,
+            //     status: s.status,
+            //     role: s.role
+            // })));
+            // console.log('   - Leave requests:', leaveRequests?.length || 0);
+            // console.log('   - Pending leaves:', pendingLeaves?.length || 0);
+            // console.log('   - Approved leaves:', approvedLeaves?.length || 0);
+            // console.log('   - Active leaves today:', activeLeaves?.length || 0);
+            // console.log('   - Timesheets:', timesheets?.length || 0);
+            // console.log('   - Pending timesheets:', pendingTimesheets?.length || 0);
 
             const stats = {
                 totalStaff: allStaff?.length || 0,
@@ -205,9 +205,9 @@ const AdminDashboard = () => {
                 staffOnLeave: activeLeaves?.length || 0,
                 pendingTimesheets: pendingTimesheets?.length || 0
             };
-            
+
             console.log('📊 Final calculated stats:', stats);
-            
+
             if (stats.totalStaff === 0) {
                 console.error('🚨 No staff data found! This indicates a database connection issue.');
                 setError('No staff data found. Please check database connection and tables.');
@@ -215,13 +215,49 @@ const AdminDashboard = () => {
 
             // Use the leave requests we already fetched as activity
             activity = leaveRequests.map(req => {
-                // Find employee/admin info from our staff data
-                const staffMember = allStaff.find(staff => 
-                    staff.employee_id === req.employee_id || 
-                    staff.id === req.employee_id ||
-                    staff.id === req.user_id
-                );
-                
+                // Find matching EMPLOYEE by employee_id/id only
+                let staffMember = null;
+
+                // First try: exact employee_id match
+                if (req.employee_id) {
+                    staffMember = employees.find(emp =>
+                        emp.employee_id === req.employee_id
+                    );
+                }
+
+                // Second try: if no match, try id match
+                if (!staffMember && req.employee_id) {
+                    staffMember = employees.find(emp =>
+                        emp.id === req.employee_id
+                    );
+                }
+
+                // Third try: if still no match, try user_id match
+                if (!staffMember && req.user_id) {
+                    staffMember = employees.find(emp =>
+                        emp.id === req.user_id
+                    );
+                }
+
+                // Log mismatch for debugging
+                if (!staffMember && (req.employee_id || req.user_id)) {
+                    console.warn('⚠️ No employee found for leave request:', {
+                        request_id: req.id,
+                        employee_id: req.employee_id,
+                        user_id: req.user_id
+                    });
+                }
+
+                // Log successful matches for verification
+                if (staffMember) {
+                    console.log('✅ Matched leave request to employee:', {
+                        request_id: req.id,
+                        employee_name: staffMember.name,
+                        employee_id: staffMember.employee_id,
+                        employee_record_id: staffMember.id
+                    });
+                }
+
                 return {
                     ...req,
                     employees: staffMember ? {
@@ -231,33 +267,59 @@ const AdminDashboard = () => {
                     } : null
                 };
             });
-            
+
             console.log('📋 Processed activity with staff info:', activity.length);
-            
+
             // Process pending timesheets with employee info
             const enrichedTimesheets = pendingTimesheets.map(timesheet => {
-                // Find employee/admin info from our staff data
-                const staffMember = allStaff.find(staff => 
-                    staff.employee_id === timesheet.employee_id || 
-                    staff.id === timesheet.employee_id ||
-                    staff.id === timesheet.user_id
-                );
-                
+                // Enhanced matching logic with more precise criteria
+                let staffMember = null;
+
+                // First try: exact employee_id match
+                if (timesheet.employee_id) {
+                    staffMember = employees.find(emp =>
+                        emp.employee_id === timesheet.employee_id
+                    );
+                }
+
+                // Second try: if no match, try id match
+                if (!staffMember && timesheet.employee_id) {
+                    staffMember = employees.find(emp =>
+                        emp.id === timesheet.employee_id
+                    );
+                }
+
+                // Third try: if still no match, try user_id match
+                if (!staffMember && timesheet.user_id) {
+                    staffMember = employees.find(emp =>
+                        emp.id === timesheet.user_id
+                    );
+                }
+
+                // Log mismatch for debugging
+                if (!staffMember && timesheet.employee_id) {
+                    console.warn('⚠️ No employee found for timesheet:', {
+                        timesheet_id: timesheet.id,
+                        employee_id: timesheet.employee_id,
+                        user_id: timesheet.user_id
+                    });
+                }
+
                 return {
                     ...timesheet,
-                    employee_name: staffMember ? staffMember.name : `Employee ${timesheet.employee_id || 'Unknown'}`
+                    employee_name: staffMember ? staffMember.name : `Employee ${timesheet.employee_id || timesheet.user_id || 'Unknown'}`
                 };
             });
-            
+
             console.log('⏰ Processed timesheets with staff info:', enrichedTimesheets.length);
             console.log('📋 Enriched timesheets data:', enrichedTimesheets);
             setPendingTimesheets(enrichedTimesheets);
-            
+
             // Final verification - compare stats vs actual state
             console.log('🏁 Final verification:');
             console.log('   - Stats pending timesheets:', stats.pendingTimesheets);
             console.log('   - Actual pending timesheets being set:', enrichedTimesheets.length);
-            
+
             setDashboardStats({
                 totalEmployees: {
                     count: stats.totalStaff,
@@ -265,38 +327,38 @@ const AdminDashboard = () => {
                 },
                 activeToday: {
                     count: stats.activeStaffToday,
-                    rate: stats.totalStaff > 0 ? 
-                        `${Math.round((stats.activeStaffToday / stats.totalStaff) * 100)}% attendance` : 
+                    rate: stats.totalStaff > 0 ?
+                        `${Math.round((stats.activeStaffToday / stats.totalStaff) * 100)}% attendance` :
                         '0% attendance'
                 },
                 onLeave: {
                     count: stats.staffOnLeave,
-                    details: stats.staffOnLeave > 0 ? 
-                        `${stats.staffOnLeave} currently on leave` : 
+                    details: stats.staffOnLeave > 0 ?
+                        `${stats.staffOnLeave} currently on leave` :
                         'No one on leave today'
                 },
                 pendingApprovals: {
                     count: stats.pendingRequests + stats.pendingTimesheets,
                     details: stats.pendingRequests > 0 || stats.pendingTimesheets > 0 ?
-                        `${stats.pendingRequests} leave requests + ${stats.pendingTimesheets} timesheets` : 
+                        `${stats.pendingRequests} leave requests + ${stats.pendingTimesheets} timesheets` :
                         'All items processed'
                 }
             });
-            
+
             console.log('🎯 Setting recent activity:', activity);
             setRecentActivity(activity || []);
-            
+
             if (activity && activity.length > 0) {
                 console.log('✅ Successfully loaded real data from Supabase');
             } else {
                 console.log('⚠️ No activity data found - this might be expected if no leave requests exist');
                 setError('No leave requests found in database.');
             }
-            
+
         } catch (error) {
             console.error('❌ Critical error loading dashboard data:', error);
             setError(`Failed to load data: ${error.message}`);
-            
+
             // Set fallback empty stats to prevent undefined errors
             setDashboardStats({
                 totalEmployees: { count: 0, change: 'Database connection error' },
@@ -304,7 +366,7 @@ const AdminDashboard = () => {
                 onLeave: { count: 0, details: 'Data unavailable' },
                 pendingApprovals: { count: 0, details: 'Cannot load requests' }
             });
-            
+
             setRecentActivity([]);
         } finally {
             setLoading(false);
@@ -318,78 +380,79 @@ const AdminDashboard = () => {
     }, [user]);
 
     const [actionLoading, setActionLoading] = useState(null); // Track which action is loading
+    const [actionStatus, setActionStatus] = useState({}); // Track action status messages
 
-    const handleApproveRequest = async (requestId) => {
+    const handleStatusChange = async (id, type, action, reason = '') => {
+        const isTimesheet = type === 'timesheet';
+        const actionType = action === 'approve' ? 'approving' : 'rejecting';
+        const actionPast = action === 'approve' ? 'approved' : 'rejected';
+        const itemType = isTimesheet ? 'timesheet' : 'leave request';
+
+        if (!id) {
+            console.error(`No ${itemType} ID provided`);
+            return;
+        }
+
         try {
-            setActionLoading(requestId);
-            await adminApi.approveLeaveRequest(requestId);
-            await loadDashboardData(); // Refresh data
-            setError('Leave request approved successfully!');
-            setTimeout(() => setError(null), 3000); // Clear success message
+            setActionLoading(id);
+            setActionStatus(prev => ({ ...prev, [id]: actionType }));
+
+            if (isTimesheet) {
+                const { supabase } = await import('../../utils/supabase');
+                const updateData = {
+                    status: actionPast
+                };
+                const { error } = await supabase
+                    .from('timesheets')
+                    .update(updateData)
+                    .eq('id', id);
+                if (error) throw error;
+            } else {
+                // Handle leave requests
+                const { supabase } = await import('../../utils/supabase');
+                const updateData = {
+                    status: actionPast
+                };
+                const { error } = await supabase
+                    .from('leave_requests')
+                    .update(updateData)
+                    .eq('id', id);
+                if (error) throw error;
+            }
+
+            // Update status and show message
+            setActionStatus(prev => ({ ...prev, [id]: actionPast }));
+            setError(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} ${actionPast} successfully!`);
+
+            // Clean up status after delay
+            const cleanupDelay = setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[id];
+                    return newStatus;
+                });
+                setError(null);
+            }, 3000);
+
+            // Refresh data after a short delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await loadDashboardData();
+
+            return () => clearTimeout(cleanupDelay);
         } catch (error) {
-            console.error('Failed to approve request:', error);
-            setError(`Failed to approve request: ${error.message}`);
+            console.error(`Failed to ${action} ${itemType}:`, error);
+            setActionStatus(prev => ({ ...prev, [id]: 'error' }));
+            setError(`Failed to ${action} ${itemType}: ${error.message}`);
         } finally {
             setActionLoading(null);
         }
     };
 
-    const handleRejectRequest = async (requestId, reason = '') => {
-        try {
-            setActionLoading(requestId);
-            await adminApi.rejectLeaveRequest(requestId, reason);
-            await loadDashboardData(); // Refresh data
-            setError('Leave request rejected!');
-            setTimeout(() => setError(null), 3000); // Clear success message
-        } catch (error) {
-            console.error('Failed to reject request:', error);
-            setError(`Failed to reject request: ${error.message}`);
-        } finally {
-            setActionLoading(null);
-        }
-    };
-
-    const handleApproveTimesheet = async (timesheetId) => {
-        try {
-            setActionLoading(timesheetId);
-            
-            // Import timesheetApi to update timesheet status
-            const { timesheetApi } = await import('../../utils/supabase');
-            await timesheetApi.updateTimesheet(timesheetId, { status: 'approved' });
-            
-            await loadDashboardData(); // Refresh data
-            setError('Timesheet approved successfully!');
-            setTimeout(() => setError(null), 3000); // Clear success message
-        } catch (error) {
-            console.error('Failed to approve timesheet:', error);
-            setError(`Failed to approve timesheet: ${error.message}`);
-        } finally {
-            setActionLoading(null);
-        }
-    };
-
-    const handleRejectTimesheet = async (timesheetId, reason = '') => {
-        try {
-            setActionLoading(timesheetId);
-            
-            // Import timesheetApi to update timesheet status
-            const { timesheetApi } = await import('../../utils/supabase');
-            await timesheetApi.updateTimesheet(timesheetId, { 
-                status: 'rejected',
-                rejection_reason: reason 
-            });
-            
-            await loadDashboardData(); // Refresh data
-            setError('Timesheet rejected!');
-            setTimeout(() => setError(null), 3000); // Clear success message
-        } catch (error) {
-            console.error('Failed to reject timesheet:', error);
-            setError(`Failed to reject timesheet: ${error.message}`);
-        } finally {
-            setActionLoading(null);
-        }
-    };
-
+    // Simplified handler functions that use the common handleStatusChange
+    const handleApproveRequest = (requestId) => handleStatusChange(requestId, 'leave', 'approve');
+    const handleRejectRequest = (requestId, reason) => handleStatusChange(requestId, 'leave', 'reject', reason);
+    const handleApproveTimesheet = (timesheetId) => handleStatusChange(timesheetId, 'timesheet', 'approve');
+    const handleRejectTimesheet = (timesheetId, reason) => handleStatusChange(timesheetId, 'timesheet', 'reject', reason);
     // Format pending requests for display (show all if no status field)
     const pendingRequests = recentActivity
         .filter(req => !req.status || req.status === 'pending' || req.status === null || req.status === '')
@@ -419,7 +482,7 @@ const AdminDashboard = () => {
                 id: req.id,
                 name: employeeName,
                 type: req.leave_type?.charAt(0).toUpperCase() + req.leave_type?.slice(1) + ' Leave' || 'Leave',
-                date: req.start_date && req.end_date 
+                date: req.start_date && req.end_date
                     ? `${new Date(req.start_date).toLocaleDateString()} - ${new Date(req.end_date).toLocaleDateString()}`
                     : 'Date not available',
                 duration: `${days || 1} day${(days || 1) > 1 ? 's' : ''}`,
@@ -431,12 +494,12 @@ const AdminDashboard = () => {
     React.useEffect(() => {
         window.debugEmployeeData = async () => {
             console.log('🔍 Starting employee data debug...');
-            
+
             try {
                 // Test direct queries
                 console.log('📊 Testing direct database queries...');
                 await adminApi.debugDatabase();
-                
+
                 // Test employee name function
                 console.log('👤 Testing employee name function...');
                 if (recentActivity && recentActivity.length > 0) {
@@ -446,15 +509,15 @@ const AdminDashboard = () => {
                         console.log('✅ Employee name result:', employeeName);
                     }
                 }
-                
+
                 console.log('📋 Current recentActivity state:', recentActivity);
                 console.log('📋 Current pendingRequests:', pendingRequests);
-                
+
             } catch (error) {
                 console.error('❌ Debug function error:', error);
             }
         };
-        
+
         return () => {
             delete window.debugEmployeeData;
         };
@@ -469,10 +532,10 @@ const AdminDashboard = () => {
                     <p className="admin-subtitle bodyRegularText4">
                         Welcome back, {user?.name || 'Admin'}! Manage your team and monitor performance
                     </p>
-                
+
                 </div>
                 <div className="admin-actions">
-                    <button 
+                    <button
                         className="admin-button secondary "
                         onClick={loadDashboardData}
                         disabled={loading}
@@ -557,7 +620,7 @@ const AdminDashboard = () => {
                         <Calendar size={15} />
                     </div>
                     <div className="stat-info">
-                        <h3  className='bodyMediumText3 '>On Leave</h3>
+                        <h3 className='bodyMediumText3 '>On Leave</h3>
                         <div className="stat-number bodyMediumText1">{dashboardStats.onLeave.count}</div>
                         <div className="stat-change bodyRegularText5">{dashboardStats.onLeave.details}</div>
                     </div>
@@ -615,21 +678,64 @@ const AdminDashboard = () => {
                                             Reason: {request.rawData.reason}
                                         </div>
                                     )}
+                                    {request.rawData?.has_documentation && (
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            marginTop: '0.5rem',
+                                            padding: '0.5rem',
+                                            backgroundColor: '#f0f9ff',
+                                            borderRadius: '0.375rem',
+                                            border: '1px solid #bfdbfe'
+                                        }}>
+                                            <FileText size={16} style={{ color: '#3b82f6' }} />
+                                            <div style={{ fontSize: '0.875rem', color: '#1e40af' }}>
+                                                <strong>Document attached:</strong> {request.rawData.document_name || 'Supporting document'}
+                                            </div>
+                                            {request.rawData.document_url && (
+                                                <button
+                                                    onClick={() => window.open(request.rawData.document_url, '_blank')}
+                                                    style={{
+                                                        padding: '0.25rem 0.5rem',
+                                                        fontSize: '0.75rem',
+                                                        backgroundColor: '#3b82f6',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '0.25rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    View Document
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="request-actions">
-                                    <button 
-                                        className="approve-btn bodyMediumText5"
+                                  <div className="request-actions">
+                                    <button
+                                        className={`approve-btn bodyMediumText5 ${
+                                            actionStatus[request.id] === 'approved' ? 'success' : 
+                                            actionStatus[request.id] === 'approving' ? 'processing' : ''
+                                        }`}
                                         onClick={() => handleApproveRequest(request.id)}
-                                        disabled={loading || actionLoading === request.id}
+                                        disabled={loading || actionLoading === request.id || 
+                                                 ['approved', 'rejected'].includes(actionStatus[request.id])}
                                     >
-                                        {actionLoading === request.id ? 'Approving...' : 'Approve'}
+                                        {actionStatus[request.id] === 'approving' ? 'Approving...' : 
+                                         actionStatus[request.id] === 'approved' ? 'Approved ✓' : 'Approve'}
                                     </button>
-                                    <button 
-                                        className="reject-btn bodyMediumText5"
+                                    <button
+                                        className={`reject-btn bodyMediumText5 ${
+                                            actionStatus[request.id] === 'rejected' ? 'success' : 
+                                            actionStatus[request.id] === 'rejecting' ? 'processing' : ''
+                                        }`}
                                         onClick={() => handleRejectRequest(request.id, 'Rejected by admin')}
-                                        disabled={loading || actionLoading === request.id}
+                                        disabled={loading || actionLoading === request.id || 
+                                                 ['approved', 'rejected'].includes(actionStatus[request.id])}
                                     >
-                                        {actionLoading === request.id ? 'Rejecting...' : 'Reject'}
+                                        {actionStatus[request.id] === 'rejecting' ? 'Rejecting...' : 
+                                         actionStatus[request.id] === 'rejected' ? 'Rejected ✗' : 'Reject'}
                                     </button>
                                 </div>
                             </div>
@@ -675,19 +781,19 @@ const AdminDashboard = () => {
                                         marginTop: '0.5rem',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap:'0.5rem',
+                                        gap: '0.5rem',
                                     }}>
                                         <div className='bodyRegularText4' style={{ marginBottom: '0.25rem', fontWeight: '500' }}>Tasks:</div>
-                                        <div style={{ 
-                                            display: 'flex', 
-                                            flexWrap: 'wrap', 
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
                                             gap: '0.5rem',
                                             marginTop: '0.25rem'
                                         }}>
                                             {(() => {
                                                 try {
                                                     let tasks = [];
-                                                    
+
                                                     if (!timesheet.tasks || timesheet.tasks === '') {
                                                         return (
                                                             <div className="task_bubble" style={{
@@ -707,13 +813,13 @@ const AdminDashboard = () => {
                                                             </div>
                                                         );
                                                     }
-                                                    
+
                                                     if (Array.isArray(timesheet.tasks)) {
                                                         tasks = timesheet.tasks;
                                                     } else if (typeof timesheet.tasks === 'string') {
                                                         tasks = JSON.parse(timesheet.tasks);
                                                     }
-                                                    
+
                                                     if (!Array.isArray(tasks) || tasks.length === 0) {
                                                         return (
                                                             <div className="task_bubble" style={{
@@ -733,7 +839,7 @@ const AdminDashboard = () => {
                                                             </div>
                                                         );
                                                     }
-                                                    
+
                                                     return tasks.map((task, index) => (
                                                         <div key={task.id || index} className="task_bubble" style={{
                                                             display: 'inline-flex',
@@ -747,7 +853,7 @@ const AdminDashboard = () => {
                                                             minWidth: '120px',
                                                             gap: '0.5rem'
                                                         }}>
-                                                            <span className="task_text" style={{ 
+                                                            <span className="task_text" style={{
                                                                 color: '#1e40af',
                                                                 flex: 1,
                                                                 minWidth: 0,
@@ -799,20 +905,30 @@ const AdminDashboard = () => {
                                         </div>
                                     )}
                                 </div>
-                                <div className="request-actions">
-                                    <button 
-                                        className="approve-btn"
+                                  <div className="request-actions">
+                                    <button
+                                        className={`approve-btn ${
+                                            actionStatus[timesheet.id] === 'approved' ? 'success' : 
+                                            actionStatus[timesheet.id] === 'approving' ? 'processing' : ''
+                                        }`}
                                         onClick={() => handleApproveTimesheet(timesheet.id)}
-                                        disabled={loading || actionLoading === timesheet.id}
+                                        disabled={loading || actionLoading === timesheet.id || 
+                                                 ['approved', 'rejected'].includes(actionStatus[timesheet.id])}
                                     >
-                                        {actionLoading === timesheet.id ? 'Approving...' : 'Approve'}
+                                        {actionStatus[timesheet.id] === 'approving' ? 'Approving...' : 
+                                         actionStatus[timesheet.id] === 'approved' ? 'Approved ✓' : 'Approve'}
                                     </button>
-                                    <button 
-                                        className="reject-btn"
+                                    <button
+                                        className={`reject-btn ${
+                                            actionStatus[timesheet.id] === 'rejected' ? 'success' : 
+                                            actionStatus[timesheet.id] === 'rejecting' ? 'processing' : ''
+                                        }`}
                                         onClick={() => handleRejectTimesheet(timesheet.id, 'Rejected by admin')}
-                                        disabled={loading || actionLoading === timesheet.id}
+                                        disabled={loading || actionLoading === timesheet.id || 
+                                                 ['approved', 'rejected'].includes(actionStatus[timesheet.id])}
                                     >
-                                        {actionLoading === timesheet.id ? 'Rejecting...' : 'Reject'}
+                                        {actionStatus[timesheet.id] === 'rejecting' ? 'Rejecting...' : 
+                                         actionStatus[timesheet.id] === 'rejected' ? 'Rejected ✗' : 'Reject'}
                                     </button>
                                 </div>
                             </div>
@@ -826,7 +942,7 @@ const AdminDashboard = () => {
                 <Dialog.Portal>
                     <Dialog.Overlay className="dialog-overlay" />
                     <Dialog.Content className="dialog-content add_dialog-content">
-                        <AddEmployeeForm 
+                        <AddEmployeeForm
                             onClose={() => setEmployeeDialogOpen(false)}
                             onSuccess={(message) => {
                                 setError(message);

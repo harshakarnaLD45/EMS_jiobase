@@ -46,6 +46,7 @@ const Sidebar = ({ open, onClose }) => {
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, isDefault: true },
       { to: "/timesheet", label: "Timesheets", icon: Clock },
       { to: "/leave", label: "Leave Requests", icon: Calendar },
+      { to: "/attendance", label: "Attendance & Calendar", icon: Calendar },
     ];
 
     const adminLinks = [
@@ -53,6 +54,7 @@ const Sidebar = ({ open, onClose }) => {
       { to: "/employees", label: "Manage Employees", icon: Users },
       { to: "/timesheet", label: "Timesheets", icon: Clock },
       { to: "/leave", label: "Leave Requests", icon: Calendar },
+      { to: "/attendance", label: "Attendance & Calendar", icon: Calendar },
     ];
 
     return isAdmin() ? adminLinks : employeeLinks;

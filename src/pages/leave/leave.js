@@ -221,7 +221,7 @@ const Leave = () => {
       <div className="leave_header">
         <div className="leave_title">
           <h1 className='bodyMediumText1'>Leave Requests</h1>
-          <p className='bodyRegularText4'>Manage your time off and leave applications</p>
+          <p className='bodyRegularText4'>Manage your team time off and leave applications</p>
           {/* {error && (
             <div style={{ 
               color: '#dc2626', 
@@ -367,6 +367,39 @@ const Leave = () => {
                   <h3 className='bodyMediumText3' style={{margin:'0px !important' }}>{leave.type} • {leave.duration}</h3>
                   <div className="leave_dates bodyRegularText5">{leave.dateRange}</div>
                   <div className="leave_reason bodyRegularText4">{leave.reason}</div>
+                  {leave.rawData?.has_documentation && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      backgroundColor: '#f0f9ff',
+                      borderRadius: '0.375rem',
+                      border: '1px solid #bfdbfe'
+                    }}>
+                      <FileText size={16} style={{ color: '#3b82f6' }} />
+                      <div style={{ fontSize: '0.875rem', color: '#1e40af' }}>
+                        <strong>Document attached:</strong> {leave.rawData.document_name || 'Supporting document'}
+                      </div>
+                      {leave.rawData.document_url && (
+                        <button
+                          onClick={() => window.open(leave.rawData.document_url, '_blank')}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.75rem',
+                            backgroundColor: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '0.25rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          View Document
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {/* <div className="leave_dates">{leave.dateRange}</div>
                   <div className="leave_reason">{leave.reason}</div> */}
                 </div>

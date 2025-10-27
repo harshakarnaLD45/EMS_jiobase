@@ -39,6 +39,70 @@
 .new_timesheet_btn:hover {
     background-color: #2563EB;
 }
+
+/* Calendar Trigger Button */
+.calendar-trigger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 8px;
+}
+
+.calendar-trigger-btn:hover {
+    background-color: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.calendar-trigger-btn:active {
+    background-color: #e5e7eb;
+    transform: scale(0.95);
+}
+
+.calendar-trigger-btn.active {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.calendar-trigger-btn.active:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+
+/* Filter group styling */
+.filter_group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter_btn {
+    padding: 6px 12px;
+    font-size: 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: white;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter_btn:hover {
+    background-color: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.filter_btn.active {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
  
 .stat_icon {
     display: flex;
@@ -162,9 +226,21 @@
     margin-bottom: 8px;
 }
 
+.entry_date_section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .entry_date {
     font-weight: 600;
     color: #111827;
+}
+
+.employee_name {
+    color: #666 !important;
+    font-size: 0.85rem !important;
+    font-style: italic !important;
 }
 
 .entry_status {

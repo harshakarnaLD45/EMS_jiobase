@@ -43,10 +43,34 @@ export function EmployeeProvider({ children }) {
     const addEmployee = async (employeeData) => {
         try {
             setError(null);
+            console.log('🔄 EmployeeContext: Adding new employee with data:', employeeData);
+            
+            // Validate required fields
+            if (!employeeData.first_name || !employeeData.last_name) {
+                throw new Error('First name and last name are required');
+            }
+            
+            if (!employeeData.email) {
+                throw new Error('Email is required');
+            }
+            
+            if (!employeeData.department) {
+                throw new Error('Department is required');
+            }
+            
+            if (!employeeData.position) {
+                throw new Error('Position is required');
+            }
+            
             const newEmployee = await employeeApi.createEmployee(employeeData);
+            
+            // Add the new employee to the state
             setEmployees(prev => [newEmployee, ...prev]);
+            
+            console.log('✅ EmployeeContext: Employee added successfully:', newEmployee);
             return newEmployee;
         } catch (err) {
+            console.error('❌ EmployeeContext: Error adding employee:', err);
             setError(err.message);
             throw err;
         }
@@ -77,6 +101,32 @@ export function EmployeeProvider({ children }) {
         }
     };
 
+    // Utility functions for the new data structure
+    const getEmployeeFullName = (employee) => {
+        if (employee.first_name && employee.last_name) {
+            return `${employee.first_name} ${employee.last_name}`.trim();
+        }
+        return employee.name || 'Unknown Employee';
+    };
+
+    const getEmployeesByDepartment = (department) => {
+        return employees.filter(emp => emp.department === department);
+    };
+
+    const getEmployeesByPosition = (position) => {
+        return employees.filter(emp => emp.position === position);
+    };
+
+    const getPositionOptions = (department) => {
+        const positionMap = {
+            'Administration': ['General Manager', 'IT Manager'],
+            'Development': ['Front End Developer', 'Back End Developer', 'Application Developer', 'Web Developer', 'AI Developer'],
+            'Design': ['UX/UI Designer'],
+            'Interns': ['Front End Developer', 'Back End Developer', 'Application Developer', 'Web Developer', 'AI Developer', 'UX/UI Designer']
+        };
+        return positionMap[department] || [];
+    };
+
     return (
         <EmployeeContext.Provider value={{
             employees,
@@ -85,7 +135,12 @@ export function EmployeeProvider({ children }) {
             addEmployee,
             updateEmployee,
             deleteEmployee,
-            refreshEmployees: loadEmployees
+            refreshEmployees: loadEmployees,
+            // Utility functions
+            getEmployeeFullName,
+            getEmployeesByDepartment,
+            getEmployeesByPosition,
+            getPositionOptions
         }}>
             {children}
         </EmployeeContext.Provider>

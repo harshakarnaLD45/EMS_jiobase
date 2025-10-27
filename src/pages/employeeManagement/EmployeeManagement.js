@@ -19,7 +19,7 @@ const EmployeeManagement = () => {
     const [notification, setNotification] = useState(null);
     const { employees, loading, error, addEmployee, updateEmployee, deleteEmployee, refreshEmployees } = useEmployees();
 
-    const departments = ['All Departments', 'Administration', 'Engineering', 'Marketing', 'HR', 'Sales'];
+    const departments = ['All Departments', 'Administration', 'Development', 'Design', 'Interns'];
     const statuses = ['All Status', 'Active', 'On Leave', 'Inactive', 'Terminated'];
 
     useEffect(() => {

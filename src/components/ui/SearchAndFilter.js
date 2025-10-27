@@ -6,10 +6,10 @@ const SearchAndFilter = ({
     onSearchChange,
     selectedDepartment = 'All Departments',
     onDepartmentChange,
-    departments = ['All Departments', 'Engineering', 'Marketing', 'HR', 'Sales', 'Finance', 'Operations'],
+    departments = ['All Departments', 'Administration', 'Development', 'Design', 'Interns'],
     selectedStatus = 'All Status',
     onStatusChange,
-    statuses = ['All Status', 'Active', 'On Leave', 'Inactive', 'Terminated'],
+    statuses = ['All Status', 'Active', 'Leave', 'Terminated'],
     placeholder = 'Search employees...'
 }) => {
     return (

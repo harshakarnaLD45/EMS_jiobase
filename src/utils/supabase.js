@@ -171,6 +171,42 @@ export const timesheetApi = {
 
         if (error) throw error;
         return data[0];
+    },
+
+    // Admin function: Get ALL employee timesheets with employee names
+    async getAllTimesheets() {
+        console.log('🔍 Fetching ALL employee timesheets for admin view...');
+        
+        const { data, error } = await supabase
+            .from('timesheets')
+            .select(`
+                *,
+                employees!inner(
+                    employee_id,
+                    first_name,
+                    last_name,
+                    name,
+                    email
+                )
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('❌ Error fetching all timesheets:', error);
+            throw error;
+        }
+
+        console.log('✅ Fetched all timesheets:', data.length);
+        
+        // Transform data to include employee name
+        const enrichedData = data.map(timesheet => ({
+            ...timesheet,
+            employee_name: timesheet.employees?.name || 
+                          `${timesheet.employees?.first_name || ''} ${timesheet.employees?.last_name || ''}`.trim() ||
+                          `Employee ${timesheet.employee_id}`
+        }));
+
+        return enrichedData;
     }
 };
 
@@ -256,8 +292,8 @@ export const leaveApi = {
             throw new Error('Insufficient casual leave balance');
         }
 
-        // Remove the user object before inserting to database
-        const { user, ...cleanLeaveData } = leaveData;
+        // Remove the user object and document before inserting to database
+        const { user, document, ...cleanLeaveData } = leaveData;
 
         // Map the data to match the updated schema
         const leaveRecord = {
@@ -270,6 +306,37 @@ export const leaveApi = {
             status: cleanLeaveData.status || 'pending',
             created_at: new Date().toISOString()
         };
+
+        // Handle document upload if provided
+        if (document) {
+          console.log('📎 Processing document upload for leave request');
+          
+          try {
+            // Use the enhanced uploadLeaveDocument function
+            const documentMetadata = await leaveApi.uploadLeaveDocument(document, cleanLeaveData.employee_id);
+            
+            if (documentMetadata) {
+              leaveRecord.has_documentation = true;
+              leaveRecord.document_url = documentMetadata.publicUrl;
+              leaveRecord.document_name = documentMetadata.fileName;
+              leaveRecord.document_type = documentMetadata.fileType;
+              leaveRecord.document_size = documentMetadata.fileSize;
+              leaveRecord.uploaded_at = documentMetadata.uploadedAt;
+              
+              console.log('✅ Document metadata added to leave record:', {
+                hasDocumentation: leaveRecord.has_documentation,
+                documentName: leaveRecord.document_name,
+                documentSize: leaveRecord.document_size,
+                documentType: leaveRecord.document_type
+              });
+            }
+          } catch (uploadError) {
+            console.error('❌ Error handling document upload:', uploadError);
+            // For now, continue without the document but log the error
+            // In production, you might want to fail the entire request
+            console.warn('⚠️ Continuing leave request creation without document due to upload error');
+          }
+        }
 
         // If balance is sufficient, create leave request
         const { data, error } = await supabase
@@ -313,6 +380,68 @@ export const leaveApi = {
 
         if (error) throw error;
         return data;
+    },
+
+    // Function to get document URL for a leave request
+    async getLeaveRequestDocument(leaveRequestId) {
+        const { data, error } = await supabase
+          .from('leave_requests')
+          .select('document_url, document_name')
+          .eq('id', leaveRequestId)
+          .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async uploadLeaveDocument(file, employeeId) {
+        if (!file) return null;
+
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${employeeId}-${Date.now()}.${fileExt}`;
+            const filePath = fileName; // Don't include folder in path, just the filename
+
+            console.log('📎 Uploading document:', {
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                employeeId,
+                filePath
+            });
+
+            // Upload file to Supabase Storage
+            const { data, error } = await supabase.storage
+                .from('leave-documents')
+                .upload(filePath, file);
+
+            if (error) {
+                console.error('❌ Error uploading document:', error);
+                throw error;
+            }
+
+            console.log('✅ Document uploaded successfully:', data);
+
+            // Get public URL for the uploaded file
+            const { data: { publicUrl } } = supabase.storage
+                .from('leave-documents')
+                .getPublicUrl(filePath);
+
+            console.log('🔗 Generated public URL:', publicUrl);
+
+            // Return comprehensive document metadata
+            return {
+                path: data.path,
+                publicUrl: publicUrl,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                uploadedAt: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('❌ Document upload failed:', error);
+            throw new Error(`Failed to upload document: ${error.message}`);
+        }
     }
 };
 
@@ -419,7 +548,9 @@ export const employeeApi = {
     },
 
     async createEmployee(employeeData) {
-        // Hash password before storing (in production, use proper hashing)
+        console.log('👤 Creating employee with data:', employeeData);
+        
+        // Process the employee data
         const processedData = {
             ...employeeData,
             // For demo purposes, storing password as-is. In production, hash it!
@@ -431,12 +562,30 @@ export const employeeApi = {
         // Remove the plain password field
         delete processedData.password;
         
+        // Ensure first_name and last_name are properly set
+        if (processedData.first_name && processedData.last_name) {
+            console.log('✅ Employee has first_name and last_name:', {
+                first_name: processedData.first_name,
+                last_name: processedData.last_name
+            });
+        } else {
+            console.log('⚠️ Employee missing first_name or last_name:', {
+                first_name: processedData.first_name,
+                last_name: processedData.last_name
+            });
+        }
+        
         const { data, error } = await supabase
             .from('employees')
             .insert([processedData])
             .select();
         
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Error creating employee:', error);
+            throw error;
+        }
+        
+        console.log('✅ Employee created successfully:', data[0]);
         return data[0];
     },
 
@@ -816,114 +965,61 @@ export const adminApi = {
     },
 
     async getRecentActivity() {
-        try {
-            console.log('🔍 Fetching recent activity...');
-            
-            // First, try to get just the leave requests without joins
-            const { data: leaveRequests, error: leaveError } = await supabase
-                .from('leave_requests')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(10);
-            
-            console.log('📊 Leave requests query result:', { leaveRequests, leaveError });
-            
-            if (leaveError) {
-                console.error('❌ Error fetching leave requests:', leaveError);
-                throw leaveError;
-            }
+        console.log('🔍 Fetching pending leave requests with direct employee join...');
+        
+        const { data, error } = await supabase
+            .from('leave_requests')
+            .select(`
+                *,
+                employees (
+                    id,
+                    employee_id,
+                    first_name,
+                    last_name,
+                    name,
+                    email,
+                    role
+                )
+            `)
+            .or('status.eq.pending,status.is.null')
+            .order('created_at', { ascending: false });
 
-            if (!leaveRequests || leaveRequests.length === 0) {
-                console.log('⚠️ No leave requests found in database');
-                return [];
-            }
-
-            console.log(`✅ Found ${leaveRequests.length} leave requests`);
-
-            // Now try to enrich with employee data
-            const enrichedData = await Promise.all(
-                leaveRequests.map(async (request) => {
-                    console.log('👤 Processing request:', request);
-                    
-                    // Try different approaches to get employee info
-                    let employee = null;
-
-                    // Method 1: Try user_id matching employee_id
-                    if (request.user_id) {
-                        console.log('🔍 Looking up employee by user_id -> employee_id:', request.user_id);
-                        const { data: empData, error: empError } = await supabase
-                            .from('employees')
-                            .select('*')
-                            .eq('employee_id', request.user_id)
-                            .maybeSingle();
-                        
-                        if (empData && !empError) {
-                            employee = empData;
-                            console.log('✅ Found employee by employee_id match:', employee);
-                        } else {
-                            console.log('⚠️ No employee found by employee_id match, error:', empError);
-                            
-                            // Method 1b: Try matching by id field
-                            const { data: empData2, error: empError2 } = await supabase
-                                .from('employees')
-                                .select('*')
-                                .eq('id', request.user_id)
-                                .maybeSingle();
-                            
-                            if (empData2 && !empError2) {
-                                employee = empData2;
-                                console.log('✅ Found employee by id match:', employee);
-                            } else {
-                                console.log('⚠️ No employee found by id match either, error:', empError2);
-                            }
-                        }
-                    }
-
-                    // Method 2: If still no employee, try getting the first employee as a fallback
-                    if (!employee) {
-                        console.log('🔍 No specific match found, getting first available employee...');
-                        const { data: empData, error: empError } = await supabase
-                            .from('employees')
-                            .select('*')
-                            .limit(1)
-                            .maybeSingle();
-                        
-                        if (empData && !empError) {
-                            employee = empData;
-                            console.log('✅ Using fallback employee:', employee);
-                        }
-                    }
-
-                    // Add employee data to request
-                    if (employee) {
-                        request.employees = {
-                            first_name: employee.first_name || employee.name?.split(' ')[0] || 'Employee',
-                            last_name: employee.last_name || employee.name?.split(' ').slice(1).join(' ') || '',
-                            name: employee.name || `${employee.first_name || 'Employee'} ${employee.last_name || ''}`.trim()
-                        };
-                        console.log('✅ Added employee data to request:', request.employees);
-                    } else {
-                        console.log('❌ No employee found for request:', request.id, 'user_id:', request.user_id);
-                        // Use the user_id as a fallback name
-                        const fallbackName = request.user_id ? `Employee ${request.user_id.slice(-4)}` : 'Unknown Employee';
-                        request.employees = {
-                            first_name: fallbackName,
-                            last_name: '',
-                            name: fallbackName
-                        };
-                    }
-
-                    return request;
-                })
-            );
-
-            console.log('🎯 Final enriched data:', enrichedData);
-            return enrichedData;
-            
-        } catch (error) {
-            console.error('❌ Error in getRecentActivity:', error);
+        if (error) {
+            console.error('❌ Error fetching pending leaves with join:', error);
             throw error;
         }
+
+        console.log('✅ Fetched pending leaves with employee data:', data);
+        return data;
+    },
+
+    async getPendingLeaveRequestsWithEmployeeData() {
+        console.log('🔍 Fetching pending leave requests with direct employee join...');
+        
+        const { data, error } = await supabase
+            .from('leave_requests')
+            .select(`
+                *,
+                employees (
+                    id,
+                    employee_id,
+                    first_name,
+                    last_name,
+                    name,
+                    email,
+                    role
+                )
+            `)
+            .or('status.eq.pending,status.is.null')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('❌ Error fetching pending leaves with join:', error);
+            throw error;
+        }
+
+        console.log('✅ Fetched pending leaves with employee data:', data);
+        return data;
     },
 
     async approveLeaveRequest(requestId) {

@@ -309,6 +309,8 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
     });
   };
 
+
+  
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -341,7 +343,11 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
                 required
                 value={formData.workDate}
                 onChange={handleChange}
-                min={new Date().toISOString().split('T')[0]}
+                min={(() => {
+                  const pastTwoDays = new Date();
+                  pastTwoDays.setDate(pastTwoDays.getDate() - 2);
+                  return pastTwoDays.toISOString().split('T')[0];
+                })()}
                 onFocus={(e) => e.target.showPicker && e.target.showPicker()}
                 style={{ ...styles.input, ...styles.inputWithIcon  }}
               />
