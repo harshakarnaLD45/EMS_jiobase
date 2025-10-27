@@ -296,6 +296,15 @@ const Dashboard = () => {
                 <div className="stats_hrs bodyMediumText1">{stats.weeklyProgress}</div>
               </div>
             </div>
+             <div className="stats-card">
+              <div className="stats-card_container">
+                <div className="stats-card_header">
+                  <span className="stats_title bodyMediumText3">This Month</span>
+                  <LineChart className="progress_icons LineChart"/>
+                </div>
+                <div className="stats_hrs bodyMediumText1">{stats.monthlyHours}</div>
+              </div>
+            </div>
             <div className="stats-card">
               <div className="stats-card_container">
                 <div className="stats-card_header">
@@ -308,15 +317,7 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-            <div className="stats-card">
-              <div className="stats-card_container">
-                <div className="stats-card_header">
-                  <span className="stats_title bodyMediumText3">This Month</span>
-                  <LineChart className="progress_icons LineChart"/>
-                </div>
-                <div className="stats_hrs bodyMediumText1">{stats.monthlyHours}</div>
-              </div>
-            </div>
+           
         
       </div>
 
