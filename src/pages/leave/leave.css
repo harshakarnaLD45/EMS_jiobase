@@ -148,15 +148,87 @@
 
 .history_header {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history_header .header_left {
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
 }
 
 .history_header h2 {
   font-size: 18px;
   font-weight: 600;
   color: #111827;
+}
+
+.filter_section {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter_group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  position: relative;
+}
+
+.filter_btn {
+  padding: 8px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: white;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter_btn:hover {
+  background-color: #f5f5f5;
+  border-color: #3B82F6;
+}
+
+.filter_btn.active {
+  background-color: #3B82F6;
+  color: white;
+  border-color: #3B82F6;
+}
+
+.calendar-trigger-btn {
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.calendar-trigger-btn:hover {
+  background-color: #f5f5f5;
+  border-color: #3B82F6;
+}
+
+.calendar-trigger-btn.active {
+  background-color: #EFF6FF;
+  border-color: #3B82F6;
+}
+
+.employee_filter {
+  min-width: 180px;
+}
+
+.employee_name {
+  display: block;
+  margin-top: 4px;
 }
 
 .leave_entry {

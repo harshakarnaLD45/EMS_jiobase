@@ -382,6 +382,121 @@ export const leaveApi = {
         return data;
     },
 
+    // Admin: Get ALL leave requests with employee info joined
+    async getAllLeaveRequestsWithEmployees() {
+        console.log('🔍 Fetching ALL leave requests with employee data for admin view...');
+        try {
+            // First try with explicit foreign key reference
+            const { data, error } = await supabase
+                .from('leave_requests')
+                .select(`
+                    *,
+                    employees!leave_requests_employee_id_fkey (
+                        id,
+                        employee_id,
+                        first_name,
+                        last_name,
+                        name,
+                        email,
+                        department,
+                        position
+                    )
+                `)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.warn('⚠️ Join with foreign key failed, trying manual lookup:', error);
+                
+                // Fallback: Get all leave requests and manually join
+                const { data: requests, error: reqError } = await supabase
+                    .from('leave_requests')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (reqError) throw reqError;
+                
+                // Get unique employee IDs
+                const employeeIds = [...new Set(requests.map(r => r.employee_id).filter(Boolean))];
+                console.log('🆔 Unique employee IDs to lookup:', employeeIds);
+                
+                // Fetch employees - use employee_id column instead of id
+                const { data: employees, error: empError } = await supabase
+                    .from('employees')
+                    .select('*')
+                    .in('employee_id', employeeIds);
+                
+                if (empError) {
+                    console.error('❌ Error fetching employees by employee_id:', empError);
+                    
+                    // Try alternative: maybe the table uses a different primary key
+                    console.log('🔄 Trying to fetch all employees and match manually...');
+                    const { data: allEmployees, error: allEmpError } = await supabase
+                        .from('employees')
+                        .select('*');
+                    
+                    if (allEmpError) {
+                        console.error('❌ Error fetching all employees:', allEmpError);
+                        return requests;
+                    }
+                    
+                    console.log('👥 Fetched all employees:', allEmployees?.length || 0);
+                    console.log('📋 Sample employee record:', allEmployees?.[0]);
+                    
+                    // Create lookup map using employee_id
+                    const empMap = {};
+                    allEmployees?.forEach(emp => {
+                        if (emp.employee_id) {
+                            empMap[emp.employee_id] = emp;
+                        }
+                    });
+                    
+                    console.log('🗺️ Employee map keys:', Object.keys(empMap));
+                    
+                    // Merge data
+                    const enriched = requests.map(req => ({
+                        ...req,
+                        employees: empMap[req.employee_id] || null
+                    }));
+                    
+                    console.log('✅ Manually joined leave requests with employees:', enriched.length);
+                    console.log('📋 Sample enriched request:', enriched[0]);
+                    return enriched;
+                }
+                
+                console.log('👥 Fetched employees:', employees?.length || 0);
+                
+                // Create lookup map using employee_id
+                const empMap = {};
+                employees?.forEach(emp => {
+                    if (emp.employee_id) {
+                        empMap[emp.employee_id] = emp;
+                    }
+                });
+                
+                // Merge data
+                const enriched = requests.map(req => ({
+                    ...req,
+                    employees: empMap[req.employee_id] || null
+                }));
+                
+                console.log('✅ Manually joined leave requests with employees:', enriched.length);
+                return enriched;
+            }
+            
+            console.log('✅ Fetched leave requests with join (admin):', data?.length || 0);
+            return data || [];
+        } catch (err) {
+            console.error('❌ Error fetching all leave requests with employees:', err);
+            // Final fallback to simple fetch without join
+            const { data: simpleData, error: simpleError } = await supabase
+                .from('leave_requests')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (simpleError) throw simpleError;
+            return simpleData || [];
+        }
+    },
+
     // Function to get document URL for a leave request
     async getLeaveRequestDocument(leaveRequestId) {
         const { data, error } = await supabase
@@ -447,6 +562,42 @@ export const leaveApi = {
 
 // Employee management related functions
 export const employeeApi = {
+    // Bulk fetch map of employee names by both id and employee_id
+    async getEmployeeNamesMap(ids) {
+        if (!ids || ids.length === 0) return {};
+        const unique = [...new Set(ids.map((v) => String(v)))];
+
+        const buildName = (row) =>
+            row.name || `${row.first_name || ''} ${row.last_name || ''}`.trim() || `Employee ${String(row.id).slice(-4)}`;
+
+        const map = {};
+        try {
+            // Query by employee_id
+            const { data: byEmpId, error: e1 } = await supabase
+                .from('employees')
+                .select('id, employee_id, first_name, last_name, name')
+                .in('employee_id', unique);
+            if (!e1 && byEmpId) {
+                for (const row of byEmpId) {
+                    if (row.employee_id) map[String(row.employee_id)] = buildName(row);
+                }
+            }
+
+            // Query by id
+            const { data: byId, error: e2 } = await supabase
+                .from('employees')
+                .select('id, employee_id, first_name, last_name, name')
+                .in('id', unique);
+            if (!e2 && byId) {
+                for (const row of byId) {
+                    if (row.id) map[String(row.id)] = buildName(row);
+                }
+            }
+        } catch (err) {
+            console.error('❌ getEmployeeNamesMap error:', err);
+        }
+        return map;
+    },
     // Get employee ID by user name, email, or user ID
     async getEmployeeByUser(user) {
         console.log('🔍 Looking up employee for user:', user);
