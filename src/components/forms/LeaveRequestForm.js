@@ -188,6 +188,7 @@ const LeaveRequestForm = ({ onClose }) => {
     reason: ''
   });
   const [documentFile, setDocumentFile] = useState(null);
+  const [fileError, setFileError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { leaveBalance, loading, error, requestLeave } = useLeave();
 
@@ -216,12 +217,16 @@ const LeaveRequestForm = ({ onClose }) => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     
+    // Clear previous errors
+    setFileError('');
+    
     if (file) {
-      // Validate file size (5MB limit)
-      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      // Validate file size (1MB limit)
+      const maxSize = 1 * 1024 * 1024; // 1MB in bytes
       if (file.size > maxSize) {
-        alert('File size must be less than 5MB');
+        setFileError('File size must be less than 1MB. Please compress your file or choose a smaller file.');
         e.target.value = ''; // Clear the input
+        setDocumentFile(null); // Clear the selected file
         return;
       }
       
@@ -236,8 +241,9 @@ const LeaveRequestForm = ({ onClose }) => {
       ];
       
       if (!allowedTypes.includes(file.type)) {
-        alert('Please upload a PDF, DOC, DOCX, JPG, or PNG file');
+        setFileError('Please upload a PDF, DOC, DOCX, JPG, or PNG file');
         e.target.value = ''; // Clear the input
+        setDocumentFile(null); // Clear the selected file
         return;
       }
       
@@ -273,7 +279,7 @@ const LeaveRequestForm = ({ onClose }) => {
 
     // Validate file upload for sick leave > 1 day
     if (isDocumentationRequired() && !documentFile) {
-      alert('Please upload supporting documentation for sick leave requests of more than one day.');
+      setFileError('Please upload supporting documentation for sick leave requests of more than one day.');
       setIsSubmitting(false);
       return;
     }
@@ -482,7 +488,7 @@ const LeaveRequestForm = ({ onClose }) => {
               <label style={styles.fileInputLabel}>
                 <FileText style={{ width: '1.5rem', height: '1.5rem' }} />
                 <span>Click to upload medical certificate or doctor's note</span>
-                <span style={styles.fileInfo}>PDF, DOC, JPG, PNG up to 5MB</span>
+                <span style={styles.fileInfo}>PDF, DOC, JPG, PNG up to 1MB</span>
               </label>
               {documentFile && (
                 <div style={{
@@ -504,6 +510,28 @@ const LeaveRequestForm = ({ onClose }) => {
                 </div>
               )}
             </div>
+            
+            {/* Error Message */}
+            {fileError && (
+              <div style={{
+                marginTop: '0.5rem',
+                padding: '0.75rem',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '0.5rem',
+                color: '#dc2626',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <svg style={{ width: '1rem', height: '1rem', flexShrink: 0 }} viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <span>{fileError}</span>
+              </div>
+            )}
+            
             <div style={{...styles.fileInfo, marginTop: '0.5rem'}}>
               Required for sick leave requests of more than one consecutive day
             </div>
