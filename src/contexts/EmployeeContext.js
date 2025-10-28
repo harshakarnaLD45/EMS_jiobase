@@ -16,15 +16,14 @@ export function EmployeeProvider({ children }) {
         try {
             setLoading(true);
             setError(null);
-            console.log('🔄 EmployeeContext: Starting to load employees and admins from database...');
+            console.log('🔄 EmployeeContext: Loading employees from database...');
             
-            // Get both employees and admins combined from their respective tables
+            // Get employees only (NOT admins)
             const data = await adminApi.getAllEmployeesAndAdmins();
             
             console.log('📊 EmployeeContext: Setting employee data:', {
                 totalRecords: data.length,
                 employees: data.filter(d => d.role === 'employee').length,
-                admins: data.filter(d => d.role === 'admin').length,
                 sampleData: data.slice(0, 2)
             });
             
@@ -32,8 +31,8 @@ export function EmployeeProvider({ children }) {
             console.log('✅ EmployeeContext: Successfully loaded and set employee data');
             
         } catch (err) {
-            console.error('❌ EmployeeContext: Error loading employees and admins:', err);
-            setError(`Failed to load staff data: ${err.message}`);
+            console.error('❌ EmployeeContext: Error loading employees:', err);
+            setError(`Failed to load employee data: ${err.message}`);
             setEmployees([]); // Set empty array on error
         } finally {
             setLoading(false);

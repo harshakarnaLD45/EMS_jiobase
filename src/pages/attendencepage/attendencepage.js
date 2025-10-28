@@ -38,22 +38,33 @@ export default function Attendance() {
     const [currentEmployee, setCurrentEmployee] = useState(null);
     const [hoveredDay, setHoveredDay] = useState(null);
     const [infoDay, setInfoDay] = useState(null);
-    
+    const [filters, setFilters] = useState({
+        employee: 'all'
+    });
+
     const { employees } = useEmployees();
     const { user, isAdmin, isEmployee } = useAuth();
+
+    // Handle filter changes
+    const handleFilterChange = (field, value) => {
+        setFilters(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    };
 
     // Calculate attendance statistics from real timesheet data (role-based)
     const attendanceStats = React.useMemo(() => {
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
         const daysInCurrentMonth = new Date(year, monthIndex + 1, 0).getDate();
-        
+
         // Filter timesheets for selected month/year
         // Note: timesheets are already filtered by employee in loadTimesheetData()
         const monthlyTimesheets = timesheets.filter(timesheet => {
             const timesheetDate = new Date(timesheet.date);
-            return timesheetDate.getMonth() === monthIndex && 
-                   timesheetDate.getFullYear() === year;
+            return timesheetDate.getMonth() === monthIndex &&
+                timesheetDate.getFullYear() === year;
         });
 
         // Count working days (excluding weekends)
@@ -69,7 +80,7 @@ export default function Attendance() {
         // Calculate present days (unique dates with timesheets)
         const presentDates = new Set();
         monthlyTimesheets.forEach(timesheet => {
-            if (timesheet.status === 'completed' || timesheet.status === 'approved' || 
+            if (timesheet.status === 'completed' || timesheet.status === 'approved' ||
                 timesheet.total_hours > 0 || timesheet.clock_in_time) {
                 presentDates.add(timesheet.date);
             }
@@ -93,32 +104,32 @@ export default function Attendance() {
         if (currentEmployee || isAdmin()) {
             loadTimesheetData();
         }
-    }, [selectedMonth, selectedYear, currentEmployee, isAdmin]);
+    }, [selectedMonth, selectedYear, currentEmployee, isAdmin, filters.employee]);
 
     // Load current employee data for role-based filtering
     const loadCurrentEmployeeData = async () => {
         if (!user) return;
-        
+
         try {
-            console.log('🔍 === EMPLOYEE IDENTIFICATION DEBUG ===');
-            console.log('🔍 Current user object:', JSON.stringify(user, null, 2));
-            console.log('🔍 User email:', user.email);
-            console.log('🔍 User id:', user.id);
-            console.log('🔍 User employee_id:', user.employee_id);
-            console.log('🔍 User name:', user.name);
-            console.log('🔍 Available employees count:', employees.length);
-            console.log('🔍 Employee emails:', employees.map(emp => ({ email: emp.email, name: emp.name || `${emp.first_name} ${emp.last_name}`, employee_id: emp.employee_id, id: emp.id })));
-            
+            // console.log('🔍 === EMPLOYEE IDENTIFICATION DEBUG ===');
+            // console.log('🔍 Current user object:', JSON.stringify(user, null, 2));
+            // console.log('🔍 User email:', user.email);
+            // console.log('🔍 User id:', user.id);
+            // console.log('🔍 User employee_id:', user.employee_id);
+            // console.log('🔍 User name:', user.name);
+            // console.log('🔍 Available employees count:', employees.length);
+            // console.log('🔍 Employee emails:', employees.map(emp => ({ email: emp.email, name: emp.name || `${emp.first_name} ${emp.last_name}`, employee_id: emp.employee_id, id: emp.id })));
+
             // PRIORITY 1: If user already has employee_id from login, use it directly
             if (user.employee_id) {
                 console.log('✅ PRIORITY 1: User has employee_id from login:', user.employee_id);
-                
+
                 // Find the full employee record for additional data
-                const employeeRecord = employees.find(emp => 
+                const employeeRecord = employees.find(emp =>
                     emp.employee_id === user.employee_id ||
                     emp.id === user.id
                 );
-                
+
                 const employeeData = {
                     id: user.id,
                     employee_id: user.employee_id, // THIS IS THE KEY FIELD
@@ -130,19 +141,19 @@ export default function Attendance() {
                     department: user.department || employeeRecord?.department,
                     position: user.position || employeeRecord?.position
                 };
-                
+
                 setCurrentEmployee(employeeData);
                 console.log('✅ Set current employee from user.employee_id:', employeeData);
                 console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', employeeData.employee_id);
                 return;
             }
-            
+
             // PRIORITY 2: Try to find employee by email (most reliable for employees list)
             let employee = employees.find(emp => emp.email === user.email);
-            
+
             if (!employee) {
                 // Try case-insensitive email match
-                employee = employees.find(emp => 
+                employee = employees.find(emp =>
                     emp.email?.toLowerCase() === user.email?.toLowerCase()
                 );
                 if (employee) {
@@ -152,8 +163,8 @@ export default function Attendance() {
 
             // PRIORITY 3: Try to find by user ID or employee_id
             if (!employee) {
-                employee = employees.find(emp => 
-                    emp.user_id === user.id || 
+                employee = employees.find(emp =>
+                    emp.user_id === user.id ||
                     emp.id === user.id ||
                     emp.employee_id === user.id
                 );
@@ -173,7 +184,7 @@ export default function Attendance() {
                     console.log('👤 PRIORITY 4: Employee found via name matching');
                 }
             }
-            
+
             if (employee) {
                 setCurrentEmployee(employee);
                 console.log('✅ Current employee found in employees list:', employee);
@@ -205,32 +216,42 @@ export default function Attendance() {
         try {
             setLoading(true);
             setError(null);
-            
+
             if (isAdmin()) {
                 // Admin view - fetch all timesheets
                 console.log('👑 Admin view: Loading all timesheets');
                 const allTimesheets = await timesheetApi.getAllTimesheets();
                 console.log('📊 Loaded all timesheets for admin:', allTimesheets.length);
-                setTimesheets(allTimesheets);
+                
+                // Apply employee filter if selected
+                let filteredTimesheets = allTimesheets;
+                if (filters.employee !== 'all') {
+                    filteredTimesheets = allTimesheets.filter(ts => 
+                        ts.employee_name === filters.employee
+                    );
+                    console.log(`📊 Filtered to ${filteredTimesheets.length} timesheets for ${filters.employee}`);
+                }
+                
+                setTimesheets(filteredTimesheets);
             } else if (isEmployee() && currentEmployee) {
                 // Employee view - fetch all timesheets and filter client-side for now
                 // This ensures we get the same data structure as admin view
                 console.log('👤 Employee view: Loading all timesheets and filtering for', currentEmployee.email);
                 const allTimesheets = await timesheetApi.getAllTimesheets();
                 console.log('📊 Loaded all timesheets:', allTimesheets.length);
-                
+
                 const targetEmployeeId = currentEmployee.employee_id || currentEmployee.id;
                 console.log('🆔 Filtering for employee ID:', targetEmployeeId);
                 console.log('🔍 Sample timesheet employee IDs:', allTimesheets.slice(0, 5).map(ts => ts.employee_id));
-                
+
                 // Filter for current employee only - try multiple ID matching strategies
-                let employeeTimesheets = allTimesheets.filter(timesheet => 
+                let employeeTimesheets = allTimesheets.filter(timesheet =>
                     timesheet.employee_id === targetEmployeeId
                 );
 
                 // If no results with exact match, try string conversion
                 if (employeeTimesheets.length === 0) {
-                    employeeTimesheets = allTimesheets.filter(timesheet => 
+                    employeeTimesheets = allTimesheets.filter(timesheet =>
                         String(timesheet.employee_id) === String(targetEmployeeId)
                     );
                     if (employeeTimesheets.length > 0) {
@@ -240,14 +261,14 @@ export default function Attendance() {
 
                 // If still no results, try matching by employee email from joined data
                 if (employeeTimesheets.length === 0) {
-                    employeeTimesheets = allTimesheets.filter(timesheet => 
+                    employeeTimesheets = allTimesheets.filter(timesheet =>
                         timesheet.employees?.email === currentEmployee.email
                     );
                     if (employeeTimesheets.length > 0) {
                         console.log('📊 Found timesheets with email matching');
                     }
                 }
-                
+
                 console.log('📊 Filtered employee timesheets:', employeeTimesheets.length);
                 console.log('📊 Sample filtered timesheet:', employeeTimesheets[0]);
                 setTimesheets(employeeTimesheets);
@@ -283,14 +304,14 @@ export default function Attendance() {
         console.log('📋 Processing table data from timesheets:', timesheets.length);
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
-        
+
         // Filter timesheets for selected month/year
         const monthlyTimesheets = timesheets.filter(timesheet => {
             const timesheetDate = new Date(timesheet.date);
-            return timesheetDate.getMonth() === monthIndex && 
-                   timesheetDate.getFullYear() === year;
+            return timesheetDate.getMonth() === monthIndex &&
+                timesheetDate.getFullYear() === year;
         });
-        
+
         console.log('📋 Monthly timesheets for table:', monthlyTimesheets.length);
         if (monthlyTimesheets.length > 0) {
             console.log('📋 Sample monthly timesheet:', monthlyTimesheets[0]);
@@ -302,10 +323,10 @@ export default function Attendance() {
             const date = timesheet.date;
             if (!groupedByDate[date]) {
                 groupedByDate[date] = {
-                    date: new Date(date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric', 
-                        year: 'numeric' 
+                    date: new Date(date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
                     }),
                     day: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
                     status: 'present',
@@ -315,16 +336,16 @@ export default function Attendance() {
                     employees: []
                 };
             }
-            
+
             // Calculate total hours
             if (timesheet.total_hours) {
                 groupedByDate[date].totalHours += parseFloat(timesheet.total_hours);
             }
-            
+
             // Track employee names
-            const employeeName = timesheet.employees?.name || 
-                                `${timesheet.employees?.first_name || ''} ${timesheet.employees?.last_name || ''}`.trim() ||
-                                'Unknown Employee';
+            const employeeName = timesheet.employees?.name ||
+                `${timesheet.employees?.first_name || ''} ${timesheet.employees?.last_name || ''}`.trim() ||
+                'Unknown Employee';
             groupedByDate[date].employees.push(employeeName);
         });
 
@@ -356,18 +377,18 @@ export default function Attendance() {
         const year = parseInt(selectedYear);
         const date = new Date(year, monthIndex, day);
         const dateString = date.toISOString().split('T')[0];
-        
-        const dayTimesheets = timesheets.filter(timesheet => 
+
+        const dayTimesheets = timesheets.filter(timesheet =>
             timesheet.date === dateString
         );
-        
+
         if (dayTimesheets.length > 0) {
             return dayTimesheets.some(ts => ts.total_hours > 0) ? 'present' : 'absent';
         }
-        
+
         const dayOfWeek = date.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) return 'weekend';
-        
+
         return null; // No data
     };
 
@@ -390,10 +411,10 @@ export default function Attendance() {
 
     if (loading) {
         return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
                 minHeight: '100vh',
                 flexDirection: 'column',
                 gap: '16px'
@@ -406,10 +427,10 @@ export default function Attendance() {
 
     if (error) {
         return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
                 minHeight: '100vh',
                 flexDirection: 'column',
                 gap: '16px'
@@ -433,13 +454,47 @@ export default function Attendance() {
                         </Badge>
                     </div>
                     <p style={{ color: 'var(--muted-foreground)' }}>
-                        {isEmployee() 
+                        {isEmployee()
                             ? `Track your personal attendance and work schedule${currentEmployee ? ` (${currentEmployee.name || currentEmployee.email})` : ''}`
                             : `Monitor team attendance and work calendar (${employees.length} employees)`
                         }
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {/* Employee Filter - Admin Only */}
+                    {isAdmin() && (
+                        <Select
+                            value={filters.employee}
+                            onValueChange={(value) => handleFilterChange('employee', value)}
+                        >
+                            <SelectTrigger
+                                className="bodyRegularText5"
+                                style={{
+                                    minWidth: 'auto',
+                                    // marginRight: '10px'
+                                }}
+                            >
+                                <SelectValue placeholder="All Employees" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Employees</SelectItem>
+                                {/* Get unique employee names from timesheets */}
+                                {Array.from(new Set(timesheets.map(ts => ts.employee_name).filter(Boolean)))
+                                    .sort()
+                                    .map(employeeName => (
+                                        <SelectItem key={employeeName} value={employeeName}>
+                                            {employeeName}
+                                        </SelectItem>
+                                    ))
+                                }
+                            </SelectContent>
+                        </Select>
+                    )}
+
+
+
+
+
                     <Select value={selectedMonth} onValueChange={(value) => {
                         setSelectedMonth(value);
                         loadTimesheetData();
@@ -466,9 +521,9 @@ export default function Attendance() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" size="icon">
+                    {/* <Button variant="outline" size="icon">
                         <Download style={{ height: '16px', width: '16px' }} />
-                    </Button>
+                    </Button> */}
                 </div>
             </div>
 
@@ -517,7 +572,7 @@ export default function Attendance() {
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
                             <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>leave</p>
-                            <div style={{ fontSize: '24px', fontWeight: 'bold',color: '#f81515ff' }}>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f81515ff' }}>
                                 {attendanceStats.absent}
                             </div>
                         </div>
@@ -534,7 +589,7 @@ export default function Attendance() {
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
                             <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Holidays</p>
-                            <div style={{ fontSize: '24px', fontWeight: 'bold',color: '#60a5fa'  }}>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>
                                 {attendanceStats.holidays}
                             </div>
                         </div>
@@ -571,20 +626,20 @@ export default function Attendance() {
                                     <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>View attendance patterns and holidays</p>
                                 </div>
 
-                                <div style={{ 
-                                    display: 'grid', 
-                                    gridTemplateColumns: 'repeat(7, 1fr)', 
-                                    gap: '8px', 
-                                    marginBottom: '16px' 
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(7, 1fr)',
+                                    gap: '8px',
+                                    marginBottom: '16px'
                                 }}>
                                     {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                                        <div key={day} style={{ 
-                                            textAlign: 'center', 
-                                            fontSize: '14px', 
-                                            fontWeight: '500', 
-                                            color: 'var(--muted-foreground)', 
-                                            paddingTop: '8px', 
-                                            paddingBottom: '8px' 
+                                        <div key={day} style={{
+                                            textAlign: 'center',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            color: 'var(--muted-foreground)',
+                                            paddingTop: '8px',
+                                            paddingBottom: '8px'
                                         }}>
                                             {day}
                                         </div>
@@ -602,7 +657,7 @@ export default function Attendance() {
                                         const attendanceStatus = getDayAttendanceStatus(day);
                                         let statusBgColor = 'var(--card)';
                                         let statusIndicator = null;
-                                        
+
                                         if (isWeekend) {
                                             statusBgColor = 'var(--muted)';
                                         } else if (attendanceStatus === 'present') {
@@ -664,10 +719,10 @@ export default function Attendance() {
                                                 )}
 
                                                 {statusIndicator && (
-                                                    <span style={{ 
-                                                        fontSize: '8px', 
+                                                    <span style={{
+                                                        fontSize: '8px',
                                                         color: attendanceStatus === 'present' ? '#16a34a' : '#dc2626',
-                                                        alignSelf: 'flex-end' 
+                                                        alignSelf: 'flex-end'
                                                     }}>
                                                         {statusIndicator}
                                                     </span>
@@ -694,13 +749,13 @@ export default function Attendance() {
                                         }} />
                                         <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Present ({attendanceStats.present} days)</span>
                                     </div>
-                                    
+
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
                                             width: '16px',
                                             height: '16px',
                                             borderRadius: '4px',
-                                             backgroundColor: '#fee2e2',
+                                            backgroundColor: '#fee2e2',
                                             border: '1px solid #f87171'
                                         }} />
                                         <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave</span>

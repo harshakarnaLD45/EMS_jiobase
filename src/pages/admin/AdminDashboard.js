@@ -35,32 +35,28 @@ const AdminDashboard = () => {
                 console.error('⚠️ Debug failed:', debugError);
             }
 
-            // Fetch employees and admins data directly (same as Employee Management)
+            // Fetch employees data (admins are NOT employees)
             let allStaff, activity, leaveRequests, timesheets;
 
             try {
-                console.log('👥 Fetching all staff (employees + admins)...');
+                console.log('👥 Fetching employees only...');
                 allStaff = await adminApi.getAllEmployeesAndAdmins();
-                console.log('✅ Staff data loaded:', allStaff?.length || 0);
-                console.log('📋 Sample staff data:', allStaff?.slice(0, 2));
+                console.log('✅ Employee data loaded:', allStaff?.length || 0);
+                console.log('📋 Sample employee data:', allStaff?.slice(0, 2));
 
                 if (!allStaff || allStaff.length === 0) {
-                    console.warn('⚠️ No staff data returned - checking individual tables...');
+                    console.warn('⚠️ No employee data returned - checking employees table...');
 
                     // Try fetching employees directly
                     const { employeeApi } = await import('../../utils/supabase');
                     const employees = await employeeApi.getEmployees();
                     console.log('📊 Direct employees query:', employees?.length || 0);
 
-                    // Try fetching admins directly
-                    const admins = await adminApi.getAdmins();
-                    console.log('👑 Direct admins query:', admins?.length || 0);
-
-                    allStaff = [...(employees || []), ...(admins || [])];
+                    allStaff = employees || [];
                 }
             } catch (staffError) {
-                console.error('❌ Error loading staff data:', staffError);
-                setError(`Staff loading failed: ${staffError.message}`);
+                console.error('❌ Error loading employee data:', staffError);
+                setError(`Employee loading failed: ${staffError.message}`);
                 allStaff = [];
             }
 
@@ -110,9 +106,8 @@ const AdminDashboard = () => {
             const currentMonth = new Date().toISOString().slice(0, 7);
             const today = new Date().toISOString().slice(0, 10);
 
-            // Filter data
-            const employees = allStaff.filter(staff => staff.role === 'employee' || !staff.isAdmin);
-            const admins = allStaff.filter(staff => staff.role === 'admin' || staff.isAdmin);
+            // All staff are employees (no admin filtering needed)
+            const employees = allStaff;
 
             const pendingLeaves = leaveRequests.filter(req =>
                 !req.status || req.status === 'pending' || req.status === null
@@ -125,23 +120,23 @@ const AdminDashboard = () => {
             // Get employee IDs who are currently on leave
             const employeeIdsOnLeave = activeLeaves.map(leave => leave.employee_id || leave.user_id);
 
-            // Calculate staff who are active today (not on leave and with active status)
-            const activeStaffToday = allStaff.filter(staff => {
+            // Calculate employees who are active today (not on leave and with active status)
+            const activeEmployeesToday = allStaff.filter(emp => {
                 // Must have active status
-                const hasActiveStatus = !staff.status ||
-                    staff.status === 'active' ||
-                    staff.status === 'Active';
+                const hasActiveStatus = !emp.status ||
+                    emp.status === 'active' ||
+                    emp.status === 'Active';
 
                 // Must NOT be on leave today
-                const isNotOnLeave = !employeeIdsOnLeave.includes(staff.id) &&
-                    !employeeIdsOnLeave.includes(staff.employee_id);
+                const isNotOnLeave = !employeeIdsOnLeave.includes(emp.id) &&
+                    !employeeIdsOnLeave.includes(emp.employee_id);
 
                 return hasActiveStatus && isNotOnLeave;
             });
 
             // Also count people with active status from database (for total active count)
-            const activeStaff = allStaff.filter(staff =>
-                !staff.status || staff.status === 'active' || staff.status === 'Active'
+            const activeStaff = allStaff.filter(emp =>
+                !emp.status || emp.status === 'active' || emp.status === 'Active'
             );
             // Filter pending timesheets - match database query logic
             const pendingTimesheets = timesheets.filter(ts =>
@@ -166,51 +161,27 @@ const AdminDashboard = () => {
             //     date: ts.date
             // })));
 
-            const newStaffThisMonth = allStaff.filter(staff =>
-                staff.created_at && staff.created_at.startsWith(currentMonth)
+            const newStaffThisMonth = allStaff.filter(emp =>
+                emp.created_at && emp.created_at.startsWith(currentMonth)
             ).length;
 
-            // // Debug the filtering
-            // console.log('🔍 Debug filtering results:');
-            // console.log('   - All staff:', allStaff?.length || 0);
-            // console.log('   - Employees:', employees?.length || 0);
-            // console.log('   - Admins:', admins?.length || 0);
-            // console.log('   - Active staff (by status):', activeStaff?.length || 0);
-            // console.log('   - Staff on leave today:', activeLeaves?.length || 0);
-            // console.log('   - Employee IDs on leave:', employeeIdsOnLeave);
-            // console.log('   - Active staff today (calculated):', activeStaffToday?.length || 0);
-            // console.log('   - Active staff today details:', activeStaffToday?.map(s => ({
-            //     id: s.id,
-            //     name: s.name,
-            //     status: s.status,
-            //     role: s.role
-            // })));
-            // console.log('   - Leave requests:', leaveRequests?.length || 0);
-            // console.log('   - Pending leaves:', pendingLeaves?.length || 0);
-            // console.log('   - Approved leaves:', approvedLeaves?.length || 0);
-            // console.log('   - Active leaves today:', activeLeaves?.length || 0);
-            // console.log('   - Timesheets:', timesheets?.length || 0);
-            // console.log('   - Pending timesheets:', pendingTimesheets?.length || 0);
-
             const stats = {
-                totalStaff: allStaff?.length || 0,
-                totalEmployees: allStaff?.length || 0, // For compatibility
+                totalEmployees: allStaff?.length || 0,
                 employeesCount: employees?.length || 0,
-                adminsCount: admins?.length || 0,
                 activeStaff: activeStaff?.length || 0,
-                activeStaffToday: activeStaffToday?.length || 0,
-                newStaffThisMonth: newStaffThisMonth || 0,
+                activeEmployeesToday: activeEmployeesToday?.length || 0,
+                newEmployeesThisMonth: newStaffThisMonth || 0,
                 pendingRequests: pendingLeaves?.length || 0,
                 approvedLeaves: approvedLeaves?.length || 0,
-                staffOnLeave: activeLeaves?.length || 0,
+                employeesOnLeave: activeLeaves?.length || 0,
                 pendingTimesheets: pendingTimesheets?.length || 0
             };
 
             console.log('📊 Final calculated stats:', stats);
 
-            if (stats.totalStaff === 0) {
-                console.error('🚨 No staff data found! This indicates a database connection issue.');
-                setError('No staff data found. Please check database connection and tables.');
+            if (stats.totalEmployees === 0) {
+                console.error('🚨 No employee data found! This indicates a database connection issue.');
+                setError('No employee data found. Please check database connection and tables.');
             }
 
             // Use the leave requests we already fetched as activity
@@ -322,19 +293,19 @@ const AdminDashboard = () => {
 
             setDashboardStats({
                 totalEmployees: {
-                    count: stats.totalStaff,
-                    change: `+${stats.newStaffThisMonth} this month (${stats.employeesCount} emp + ${stats.adminsCount} admin)`
+                    count: stats.totalEmployees,
+                    change: `+${stats.newEmployeesThisMonth} this month`
                 },
                 activeToday: {
-                    count: stats.activeStaffToday,
-                    rate: stats.totalStaff > 0 ?
-                        `${Math.round((stats.activeStaffToday / stats.totalStaff) * 100)}% attendance` :
+                    count: stats.activeEmployeesToday,
+                    rate: stats.totalEmployees > 0 ?
+                        `${Math.round((stats.activeEmployeesToday / stats.totalEmployees) * 100)}% attendance` :
                         '0% attendance'
                 },
                 onLeave: {
-                    count: stats.staffOnLeave,
-                    details: stats.staffOnLeave > 0 ?
-                        `${stats.staffOnLeave} currently on leave` :
+                    count: stats.employeesOnLeave,
+                    details: stats.employeesOnLeave > 0 ?
+                        `${stats.employeesOnLeave} currently on leave` :
                         'No one on leave today'
                 },
                 pendingApprovals: {
@@ -598,7 +569,7 @@ const AdminDashboard = () => {
                         <Users size={15} />
                     </div>
                     <div className="stat-info">
-                        <h3 className='bodyMediumText3 '>Total Staff</h3>
+                        <h3 className='bodyMediumText3 '>Total Employees</h3>
                         <div className="stat-number bodyMediumText1">{dashboardStats.totalEmployees.count}</div>
                         <div className="stat-change bodyRegularText5" style={{ fontSize: '0.75rem' }}>{dashboardStats.totalEmployees.change}</div>
                     </div>

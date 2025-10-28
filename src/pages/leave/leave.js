@@ -5,6 +5,7 @@ import { useLeave } from '../../contexts/LeaveContext';
 import { LeaveRequestForm } from '../../components';
 import CustomCalendar from '../../components/common/calender/CustomCalendar';
 import '../../components/common/calender/CustomCalendar.css';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import './leave.css';
 
 const Leave = () => {
@@ -458,31 +459,32 @@ const Leave = () => {
             <div className="filter_group">
               {/* Employee Filter - Admin Only */}
               {isAdmin && (
-                <select 
+                <Select 
                   value={filters.employee}
-                  onChange={(e) => handleFilterChange('employee', e.target.value)}
-                  className="employee_filter bodyMediumText4"
-                  style={{
-                    padding: '8px 12px',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '6px',
-                    backgroundColor: 'white',
-                    fontSize: '14px',
-                    color: '#333',
-                    marginRight: '10px'
-                  }}
+                  onValueChange={(value) => handleFilterChange('employee', value)}
                 >
-                  <option value="all">All Employees</option>
-                  {/* Get unique employee names from leave requests */}
-                  {Array.from(new Set(leaveHistory.map(lh => lh.employeeName).filter(Boolean)))
-                    .sort()
-                    .map(employeeName => (
-                      <option key={employeeName} value={employeeName}>
-                        {employeeName}
-                      </option>
-                    ))
-                  }
-                </select>
+                  <SelectTrigger 
+                    className="bodyMediumText4"
+                    style={{
+                      minWidth: '180px',
+                      marginRight: '10px'
+                    }}
+                  >
+                    <SelectValue placeholder="All Employees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Employees</SelectItem>
+                    {/* Get unique employee names from leave requests */}
+                    {Array.from(new Set(leaveHistory.map(lh => lh.employeeName).filter(Boolean)))
+                      .sort()
+                      .map(employeeName => (
+                        <SelectItem key={employeeName} value={employeeName}>
+                          {employeeName}
+                        </SelectItem>
+                      ))
+                    }
+                  </SelectContent>
+                </Select>
               )}
               
               {/* Quick Filter Buttons */}

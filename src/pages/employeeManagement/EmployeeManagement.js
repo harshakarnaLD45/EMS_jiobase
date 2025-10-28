@@ -13,6 +13,8 @@ import '../../styles/tailwind.css';
 
 const EmployeeManagement = () => {
     const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
     const [selectedStatus, setSelectedStatus] = useState('All Status');
@@ -20,7 +22,7 @@ const EmployeeManagement = () => {
     const { employees, loading, error, addEmployee, updateEmployee, deleteEmployee, refreshEmployees } = useEmployees();
 
     const departments = ['All Departments', 'Administration', 'Development', 'Design', 'Interns'];
-    const statuses = ['All Status', 'Active', 'On Leave', 'Inactive', 'Terminated'];
+    const statuses = ['All Status', 'Active', 'Leave',  'Terminated'];
 
     useEffect(() => {
         if (error) {
@@ -132,7 +134,7 @@ const EmployeeManagement = () => {
             <div className="page-header">
                 <div>
                     <h1 className='bodyMediumText1'>Employee Management</h1>
-                    <p className='bodyRegularText4'>View and manage employee and admin information</p>
+                    <p className='bodyRegularText4'>View and manage employee information</p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {/* <button
@@ -166,12 +168,12 @@ const EmployeeManagement = () => {
                     <div className="employee-count">
                         <h1 className='bodyMediumText2'>
                             {selectedDepartment === 'All Departments'
-                                ? `All Staff (${filteredEmployees.length})`
-                                : `${selectedDepartment} Staff (${filteredEmployees.length})`
+                                ? `All Employees (${filteredEmployees.length})`
+                                : `${selectedDepartment} Employees (${filteredEmployees.length})`
                             }
                         </h1>
                         <p className='bodyRegularText4'>
-                            Includes employees and administrators
+                            Manage employee records and status
                         </p>
                     </div>
 
@@ -190,14 +192,45 @@ const EmployeeManagement = () => {
 
                 <EmployeeTable 
                     employees={filteredEmployees}
-                    showActions={false} // Set to true when edit/delete functionality is ready
+                    showActions={true} // Enable edit/delete actions
                     onEdit={(employee) => {
-                        // TODO: Implement edit functionality
-                        console.log('Edit employee:', employee);
+                        setSelectedEmployee(employee);
+                        setEditDialogOpen(true);
                     }}
-                    onDelete={(employee) => {
-                        // TODO: Implement delete functionality  
-                        console.log('Delete employee:', employee);
+                    onDelete={async (employee) => {
+                        try {
+                            // Confirm before terminating
+                            const confirmed = window.confirm(
+                                `Are you sure you want to terminate ${employee.name}?\n\nThis will mark the employee as "Terminated" but keep their records in the system.`
+                            );
+                            
+                            if (!confirmed) return;
+
+                            // Update employee status to "Terminated" instead of deleting
+                            await updateEmployee(employee.id, { 
+                                status: 'Terminated',
+                                terminated_at: new Date().toISOString()
+                            });
+                            
+                            setNotification({
+                                type: 'success',
+                                message: `${employee.name} has been marked as Terminated`
+                            });
+                            
+                            // Refresh the employee list
+                            refreshEmployees();
+                            
+                            // Clear notification after 3 seconds
+                            setTimeout(() => setNotification(null), 3000);
+                            
+                        } catch (error) {
+                            console.error('Error terminating employee:', error);
+                            setNotification({
+                                type: 'error',
+                                message: `Failed to terminate employee: ${error.message}`
+                            });
+                            setTimeout(() => setNotification(null), 5000);
+                        }
                     }}
                 />
             </div>
@@ -210,6 +243,40 @@ const EmployeeManagement = () => {
                             onClose={() => setEmployeeDialogOpen(false)}
                             onSuccess={handleEmployeeSuccess}
                             onError={handleEmployeeError}
+                        />
+                    </Dialog.Content>
+                </Dialog.Portal>
+            </Dialog.Root>
+
+            {/* Edit Employee Dialog */}
+            <Dialog.Root open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <Dialog.Portal>
+                    <Dialog.Overlay className="dialog-overlay" />
+                    <Dialog.Content className="dialog-content add_dialog-content">
+                        <AddEmployeeForm 
+                            mode="edit"
+                            employeeData={selectedEmployee}
+                            onClose={() => {
+                                setEditDialogOpen(false);
+                                setSelectedEmployee(null);
+                            }}
+                            onSuccess={(message) => {
+                                setNotification({
+                                    type: 'success',
+                                    message: message
+                                });
+                                refreshEmployees();
+                                setEditDialogOpen(false);
+                                setSelectedEmployee(null);
+                                setTimeout(() => setNotification(null), 3000);
+                            }}
+                            onError={(message) => {
+                                setNotification({
+                                    type: 'error',
+                                    message: message
+                                });
+                                setTimeout(() => setNotification(null), 5000);
+                            }}
                         />
                     </Dialog.Content>
                 </Dialog.Portal>

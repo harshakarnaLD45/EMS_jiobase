@@ -795,52 +795,15 @@ export const adminApi = {
         return data || [];
     },
 
-    // Get all employees and admins combined for employee management
+    // Get all employees (admins are NOT employees)
     async getAllEmployeesAndAdmins() {
-        console.log('👥 Starting to fetch employees and admins from database tables...');
+        console.log('👥 Fetching employees from database...');
         
         try {
             // Get employees from employees table
             console.log('📋 Fetching from employees table...');
             const employees = await employeeApi.getEmployees();
             console.log('✅ Employees loaded from database:', employees.length, employees.length > 0 ? employees.slice(0, 2) : 'No employees found');
-            
-            // Get admins from admins table  
-            console.log('👑 Fetching from admins table...');
-            const admins = await this.getAdmins();
-            console.log('✅ Admins loaded from database:', admins.length, admins.length > 0 ? admins.slice(0, 2) : 'No admins found');
-            
-            // Transform admins to match employee structure
-            console.log('🔄 Transforming admin data to match employee format...');
-            const transformedAdmins = admins.map((admin, index) => {
-                console.log(`Admin ${index + 1}:`, {
-                    original: admin,
-                    transformed: {
-                        id: `admin_${admin.id}`,
-                        name: admin.name || `${admin.first_name || ''} ${admin.last_name || ''}`.trim(),
-                        email: admin.email,
-                        department: admin.department || 'Administration',
-                        role: 'admin'
-                    }
-                });
-                
-                return {
-                    id: `admin_${admin.id}`, // Prefix to avoid ID conflicts
-                    employee_id: admin.id,
-                    name: admin.name || `${admin.first_name || ''} ${admin.last_name || ''}`.trim() || 'Admin User',
-                    email: admin.email,
-                    department: admin.department || 'Administration',
-                    position: admin.position || 'Administrator',
-                    role: 'admin',
-                    status: admin.status || 'active',
-                    phone: admin.phone || '',
-                    hire_date: admin.created_at || admin.hire_date,
-                    created_at: admin.created_at,
-                    isAdmin: true,
-                    // Keep original admin data for reference
-                    originalAdminData: admin
-                };
-            });
             
             // Add role field to employees for consistency
             const employeesWithRole = employees.map(emp => ({
@@ -849,18 +812,13 @@ export const adminApi = {
                 isAdmin: false
             }));
             
-            // Combine employees and admins
-            const combined = [...employeesWithRole, ...transformedAdmins];
-            
-            console.log('🎯 Final combined result:');
-            console.log(`   - Total records: ${combined.length}`);
-            console.log(`   - Employees: ${employeesWithRole.length}`);
-            console.log(`   - Admins: ${transformedAdmins.length}`);
-            console.log('   - Sample combined data:', combined.slice(0, 3));
-            return combined;
+            console.log('🎯 Final result:');
+            console.log(`   - Total employees: ${employeesWithRole.length}`);
+            console.log('   - Sample data:', employeesWithRole.slice(0, 3));
+            return employeesWithRole;
             
         } catch (error) {
-            console.error('❌ Error fetching employees and admins:', error);
+            console.error('❌ Error fetching employees:', error);
             throw error;
         }
     },
@@ -953,9 +911,9 @@ export const adminApi = {
     },
     async getDashboardStats() {
         try {
-            console.log('📈 Getting comprehensive dashboard stats (employees + admins)...');
+            console.log('📈 Getting dashboard stats for employees only...');
             
-            // Get all employees from employees table
+            // Get all employees from employees table (NOT admins)
             const { data: employees, error: empError } = await supabase
                 .from('employees')
                 .select('id, status, created_at, name, email');
@@ -964,26 +922,13 @@ export const adminApi = {
                 console.error('❌ Error fetching employees:', empError);
             }
             
-            // Get all admins from admins table
-            const { data: admins, error: adminError } = await supabase
-                .from('admins')
-                .select('id, status, created_at, name, email');
-            
-            if (adminError) {
-                console.error('❌ Error fetching admins:', adminError);
-            }
-            
-            // Combine employees and admins for total staff count
-            const allStaff = [...(employees || []), ...(admins || [])];
-            const activeStaff = allStaff.filter(staff => 
-                !staff.status || staff.status === 'active' || staff.status === 'Active'
+            const activeEmployees = (employees || []).filter(emp => 
+                !emp.status || emp.status === 'active' || emp.status === 'Active'
             );
             
-            console.log('📊 Staff Statistics:');
+            console.log('📊 Employee Statistics:');
             console.log(`   - Total Employees: ${employees?.length || 0}`);
-            console.log(`   - Total Admins: ${admins?.length || 0}`);
-            console.log(`   - Total Staff: ${allStaff.length}`);
-            console.log(`   - Active Staff: ${activeStaff.length}`);
+            console.log(`   - Active Employees: ${activeEmployees.length}`);
 
             // Get pending leave requests (try different status approaches)
             let { data: pendingLeaves, error: leaveError } = await supabase
@@ -1051,58 +996,42 @@ export const adminApi = {
             
             if (timesheetError) console.error('Error fetching timesheets:', timesheetError);
 
-            // Calculate new staff members this month (employees + admins)
-            const newEmployeesThisMonth = allStaff.filter(staff => 
-                staff.created_at && staff.created_at.startsWith(currentMonth)
-            ).length;
-            
-            const newAdminsThisMonth = (admins || []).filter(admin => 
-                admin.created_at && admin.created_at.startsWith(currentMonth)
+            // Calculate new employees this month
+            const newEmployeesThisMonth = (employees || []).filter(emp => 
+                emp.created_at && emp.created_at.startsWith(currentMonth)
             ).length;
 
-            // Calculate staff currently on leave
-            const staffOnLeave = activeLeaves?.length || 0;
-            const activeStaffToday = Math.max(0, activeStaff.length - staffOnLeave);
+            // Calculate employees currently on leave
+            const employeesOnLeave = activeLeaves?.length || 0;
+            const activeEmployeesToday = Math.max(0, activeEmployees.length - employeesOnLeave);
             
             console.log('📊 Dashboard stats calculated:', {
-                totalStaff: allStaff.length,
                 totalEmployees: employees?.length || 0,
-                totalAdmins: admins?.length || 0,
-                activeStaff: activeStaff.length,
-                newStaffThisMonth: newEmployeesThisMonth,
-                newEmployeesThisMonth: (employees || []).filter(emp => 
-                    emp.created_at && emp.created_at.startsWith(currentMonth)
-                ).length,
-                newAdminsThisMonth,
+                activeEmployees: activeEmployees.length,
+                newEmployeesThisMonth,
                 pendingRequests: pendingLeaves.length,
                 approvedLeaves: approvedLeaves?.length || 0,
-                staffOnLeave,
-                activeStaffToday,
+                employeesOnLeave,
+                activeEmployeesToday,
                 pendingTimesheets: pendingTimesheets?.length || 0
             });
 
             return {
-                // Total staff (employees + admins)
-                totalEmployees: allStaff.length, // Renamed for compatibility but includes both
-                totalStaff: allStaff.length,
+                // Employee counts (admins are NOT included)
+                totalEmployees: employees?.length || 0,
                 employeesCount: employees?.length || 0,
-                adminsCount: admins?.length || 0,
-                activeStaff: activeStaff.length,
+                activeStaff: activeEmployees.length,
                 
-                // New additions this month
+                // New employees this month
                 newEmployeesThisMonth,
-                newStaffThisMonth: newEmployeesThisMonth,
-                newAdminsThisMonth,
                 
                 // Leave statistics
                 pendingRequests: pendingLeaves.length,
                 approvedLeaves: approvedLeaves?.length || 0,
-                employeesOnLeave: staffOnLeave,
-                staffOnLeave,
+                employeesOnLeave,
                 
                 // Active today
-                activeEmployeesToday: activeStaffToday,
-                activeStaffToday,
+                activeEmployeesToday,
                 
                 // Other metrics
                 pendingTimesheets: pendingTimesheets?.length || 0,
@@ -1202,7 +1131,7 @@ export const adminApi = {
             throw error;
         }
         
-        // Update employee status to "On-leave" - try multiple approaches for better reliability
+        // Update employee status to "On-leave"
         if (leaveRequest.employee_id || leaveRequest.user_id) {
             const employeeIdToUpdate = leaveRequest.employee_id || leaveRequest.user_id;
             console.log('📝 Updating employee status to On-leave for ID:', employeeIdToUpdate);
@@ -1229,18 +1158,6 @@ export const adminApi = {
                 }
             } else {
                 console.log('✅ Employee status updated to On-leave (via id field)');
-            }
-            
-            // Also try updating admins table in case the person is an admin
-            const { data: adminUpdate, error: adminError } = await supabase
-                .from('admins')
-                .update({ status: 'On-leave' })
-                .eq('id', employeeIdToUpdate);
-            
-            if (adminError) {
-                console.log('ℹ️ No admin record found to update (this is normal for employees):', adminError.message);
-            } else if (adminUpdate && adminUpdate.length > 0) {
-                console.log('✅ Admin status also updated to On-leave');
             }
         } else {
             console.error('⚠️ No employee_id or user_id found in leave request, cannot update employee status');
@@ -1280,7 +1197,7 @@ export const adminApi = {
             throw error;
         }
         
-        // Update employee status back to "active" since leave was rejected - try multiple approaches
+        // Update employee status back to "active" since leave was rejected
         if (leaveRequest.employee_id || leaveRequest.user_id) {
             const employeeIdToUpdate = leaveRequest.employee_id || leaveRequest.user_id;
             console.log('📝 Updating employee status to active for ID:', employeeIdToUpdate);
@@ -1307,18 +1224,6 @@ export const adminApi = {
                 }
             } else {
                 console.log('✅ Employee status updated to active (via id field)');
-            }
-            
-            // Also try updating admins table in case the person is an admin
-            const { data: adminUpdate, error: adminError } = await supabase
-                .from('admins')
-                .update({ status: 'active' })
-                .eq('id', employeeIdToUpdate);
-            
-            if (adminError) {
-                console.log('ℹ️ No admin record found to update (this is normal for employees):', adminError.message);
-            } else if (adminUpdate && adminUpdate.length > 0) {
-                console.log('✅ Admin status also updated to active');
             }
         } else {
             console.error('⚠️ No employee_id or user_id found in leave request, cannot update employee status');

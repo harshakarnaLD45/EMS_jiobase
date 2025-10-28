@@ -160,7 +160,7 @@ const Sidebar = ({ open, onClose }) => {
               {user?.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
             </span>
           </div>
-          <div style={{ flex: '1' }}>
+          <div style={{display: 'flex', flexDirection: 'column',alignContent: 'center' }}>
             <h3 className=" bodyMediumText4" style={{marginBottom:'0px', fontSize: '14px', fontWeight: '500', color: '#111827'}}>{user?.name || 'User'}</h3>
             <p className=" bodyRegularText5" style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
               {user?.role === 'admin' ? 'Administrator' : 'Employee'} • {user?.role === 'admin' ? 'Management' : 'Staff'}

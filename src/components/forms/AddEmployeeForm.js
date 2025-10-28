@@ -19,7 +19,7 @@ import { useEmployees } from '../../contexts/EmployeeContext';
 import '../../pages/attendencepage/attendence.css';
 
 
-const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
+const AddEmployeeForm = ({ mode = 'add', employeeData = null, onClose, onSuccess, onError }) => {
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -32,50 +32,93 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const { addEmployee, getPositionOptions } = useEmployees();
+    const { addEmployee, updateEmployee, getPositionOptions } = useEmployees();
 
     const departments = ['Administration', 'Development', 'Design', 'Interns'];
+
+    // Load employee data when in edit mode
+    React.useEffect(() => {
+        if (mode === 'edit' && employeeData) {
+            setFormData({
+                firstName: employeeData.first_name || '',
+                lastName: employeeData.last_name || '',
+                email: employeeData.email || '',
+                phone: employeeData.phone || '',
+                department: employeeData.department || '',
+                position: employeeData.position || '',
+                joinDate: employeeData.join_date ? employeeData.join_date.split('T')[0] : '',
+                password: '' // Don't show existing password
+            });
+        }
+    }, [mode, employeeData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
 
         try {
-            const newEmployee = {
-                first_name: formData.firstName,
-                last_name: formData.lastName,
-                name: `${formData.firstName} ${formData.lastName}`.trim(), // Full name for compatibility
-                email: formData.email,
-                phone: formData.phone,
-                department: formData.department,
-                position: formData.position,
-                status: 'Active',
-                join_date: formData.joinDate,
-                password: formData.password
-            };
+            if (mode === 'edit') {
+                // Update existing employee
+                const updates = {
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    name: `${formData.firstName} ${formData.lastName}`.trim(),
+                    email: formData.email,
+                    phone: formData.phone,
+                    department: formData.department,
+                    position: formData.position,
+                    join_date: formData.joinDate,
+                };
 
-            await addEmployee(newEmployee);
-            onClose();
-            
-            if (onSuccess) {
-                onSuccess(`Employee ${formData.firstName} ${formData.lastName} has been added successfully!`);
+                // Only update password if a new one was entered
+                if (formData.password) {
+                    updates.password = formData.password;
+                }
+
+                await updateEmployee(employeeData.id, updates);
+                onClose();
+                
+                if (onSuccess) {
+                    onSuccess(`Employee ${formData.firstName} ${formData.lastName} has been updated successfully!`);
+                }
+            } else {
+                // Add new employee
+                const newEmployee = {
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    name: `${formData.firstName} ${formData.lastName}`.trim(),
+                    email: formData.email,
+                    phone: formData.phone,
+                    department: formData.department,
+                    position: formData.position,
+                    status: 'Active',
+                    join_date: formData.joinDate,
+                    password: formData.password
+                };
+
+                await addEmployee(newEmployee);
+                onClose();
+                
+                if (onSuccess) {
+                    onSuccess(`Employee ${formData.firstName} ${formData.lastName} has been added successfully!`);
+                }
+
+                // Reset form
+                setFormData({
+                    firstName: '',
+                    lastName: '',
+                    email: '',
+                    phone: '',
+                    department: '',
+                    position: '',
+                    joinDate: '',
+                    password: ''
+                });
             }
-
-            // Reset form
-            setFormData({
-                firstName: '',
-                lastName: '',
-                email: '',
-                phone: '',
-                department: '',
-                position: '',
-                joinDate: '',
-                password: ''
-            });
         } catch (error) {
-            console.error('Error adding employee:', error);
+            console.error(`Error ${mode === 'edit' ? 'updating' : 'adding'} employee:`, error);
             if (onError) {
-                onError(`Failed to add employee: ${error.message}`);
+                onError(`Failed to ${mode === 'edit' ? 'update' : 'add'} employee: ${error.message}`);
             }
         } finally {
             setIsSubmitting(false);
@@ -111,10 +154,12 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
     return (
         <Box component="form" onSubmit={handleSubmit} sx={{ p: 3, maxWidth: 600, width: '100%' }}>
             <Typography variant="h5" component="h2" gutterBottom>
-                Add New Employee
+                {mode === 'edit' ? 'Edit Employee' : 'Add New Employee'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Enter the employee details below. All fields are required.
+                {mode === 'edit' 
+                    ? 'Update the employee details below.' 
+                    : 'Enter the employee details below. All fields are required.'}
             </Typography>
 
             <Stack spacing={3}>
@@ -267,10 +312,10 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
                         fullWidth
                         label="Password"
                         type={showPassword ? "text" : "password"}
-                        required
+                        required={mode === 'add'}
                         value={formData.password}
                         onChange={(e) => handleInputChange('password', e.target.value)}
-                        placeholder="Enter temporary password"
+                        placeholder={mode === 'edit' ? 'Leave blank to keep current password' : 'Enter temporary password'}
                         inputProps={{ minLength: 8, maxLength: 15 }}
                         InputProps={{
                             endAdornment: (
@@ -294,7 +339,9 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
                                 </InputAdornment>
                             ),
                         }}
-                        helperText="Minimum 8 characters. Employee can change this after first login."
+                        helperText={mode === 'edit' 
+                            ? 'Leave blank to keep current password. Minimum 8 characters if changing.' 
+                            : 'Minimum 8 characters. Employee can change this after first login.'}
                     />
                 </Box>
 
@@ -315,7 +362,9 @@ const AddEmployeeForm = ({ onClose, onSuccess, onError }) => {
                         disabled={isSubmitting}
                         size="large"
                     >
-                        {isSubmitting ? 'Adding Employee...' : 'Add Employee'}
+                        {isSubmitting 
+                            ? (mode === 'edit' ? 'Updating Employee...' : 'Adding Employee...') 
+                            : (mode === 'edit' ? 'Update Employee' : 'Add Employee')}
                     </Button>
                 </Stack>
             </Stack>
