@@ -46,7 +46,7 @@ const EmployeeTable = ({
             case 'inactive':
                 return 'error';
             case 'on leave':
-                return 'warning';
+                return 'error';
             default:
                 return 'default';
         }

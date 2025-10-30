@@ -152,14 +152,39 @@ export const timesheetApi = {
     },
 
     async getTimesheetsByEmployeeId(employeeId) {
+        console.log('🔍 Fetching timesheets for employee:', employeeId);
+        
         const { data, error } = await supabase
             .from('timesheets')
-            .select('*')
+            .select(`
+                *,
+                employees!inner(
+                    employee_id,
+                    first_name,
+                    last_name,
+                    name,
+                    email
+                )
+            `)
             .eq('employee_id', employeeId)
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        return data;
+        if (error) {
+            console.error('❌ Error fetching employee timesheets:', error);
+            throw error;
+        }
+
+        console.log('✅ Fetched employee timesheets:', data.length);
+        
+        // Transform data to include employee name for consistency
+        const enrichedData = data.map(timesheet => ({
+            ...timesheet,
+            employee_name: timesheet.employees?.name || 
+                          `${timesheet.employees?.first_name || ''} ${timesheet.employees?.last_name || ''}`.trim() ||
+                          `Employee ${timesheet.employee_id}`
+        }));
+
+        return enrichedData;
     },
 
     async updateTimesheet(id, updates) {
@@ -380,6 +405,81 @@ export const leaveApi = {
 
         if (error) throw error;
         return data;
+    },
+
+    // Check if employee has any active approved leave requests for today's date
+    async checkActiveLeaveRequest(employeeId, userId) {
+        console.log('🔍 Checking for active leave requests for employee:', employeeId || userId);
+        
+        const today = new Date().toISOString().slice(0, 10); // Get today's date in YYYY-MM-DD format
+        console.log('📅 Today\'s date:', today);
+        
+        try {
+            const { data, error } = await supabase
+                .from('leave_requests')
+                .select('*')
+                .eq('status', 'approved')
+                .lte('start_date', today)
+                .gte('end_date', today)
+                .eq('employee_id', employeeId || userId);
+
+            if (error) {
+                console.error('❌ Error checking active leave requests:', error);
+                throw error;
+            }
+
+            console.log('📋 Active leave requests found:', data?.length || 0);
+            if (data && data.length > 0) {
+                console.log('📝 Active leave details:', data[0]);
+            }
+            
+            return {
+                hasActiveLeave: data && data.length > 0,
+                activeLeave: data && data.length > 0 ? data[0] : null
+            };
+        } catch (error) {
+            console.error('❌ Error in checkActiveLeaveRequest:', error);
+            throw error;
+        }
+    },
+
+    // Check if employee has any approved leave requests that overlap a given date range
+    async checkOverlappingApprovedLeave(employeeId, userId, startDate, endDate) {
+        console.log('🔍 Checking for overlapping approved leaves for:', employeeId || userId, { startDate, endDate });
+
+        try {
+            // Fetch approved leaves for the employee then perform overlap check client-side
+            const { data, error } = await supabase
+                .from('leave_requests')
+                .select('*')
+                .eq('status', 'approved')
+                .eq('employee_id', employeeId || userId);
+
+            if (error) {
+                console.error('❌ Error fetching approved leaves for overlap check:', error);
+                throw error;
+            }
+
+            // Normalize incoming dates (YYYY-MM-DD)
+            const sDate = (startDate || '').split('T')[0];
+            const eDate = (endDate || '').split('T')[0];
+
+            const overlapping = (data || []).filter(l => {
+                const ls = (l.start_date || '').split('T')[0];
+                const le = (l.end_date || '').split('T')[0];
+                if (!ls || !le || !sDate || !eDate) return false;
+
+                // Overlap exists unless one range ends before the other starts
+                // i.e., NOT (le < sDate OR ls > eDate)
+                return !(le < sDate || ls > eDate);
+            });
+
+            console.log('📋 Overlapping approved leaves found:', overlapping.length);
+            return { hasOverlap: overlapping.length > 0, overlappingLeaves: overlapping };
+        } catch (err) {
+            console.error('❌ Error in checkOverlappingApprovedLeave:', err);
+            throw err;
+        }
     },
 
     // Admin: Get ALL leave requests with employee info joined
@@ -750,25 +850,25 @@ export const employeeApi = {
         return data;
     },
 
-    async updateEmployee(id, updates) {
+    async updateEmployee(employeeId, updates) {
         const { data, error } = await supabase
             .from('employees')
             .update({
                 ...updates,
                 updated_at: new Date().toISOString()
             })
-            .eq('id', id)
+            .eq('employee_id', employeeId)
             .select();
 
         if (error) throw error;
         return data[0];
     },
 
-    async deleteEmployee(id) {
+    async deleteEmployee(employeeId) {
         const { error } = await supabase
             .from('employees')
             .delete()
-            .eq('id', id);
+            .eq('employee_id', employeeId);
 
         if (error) throw error;
         return true;
@@ -1131,15 +1231,15 @@ export const adminApi = {
             throw error;
         }
         
-        // Update employee status to "On-leave"
-        if (leaveRequest.employee_id || leaveRequest.user_id) {
-            const employeeIdToUpdate = leaveRequest.employee_id || leaveRequest.user_id;
-            console.log('📝 Updating employee status to On-leave for ID:', employeeIdToUpdate);
+        // Update employee status to "Leave"
+        if (leaveRequest.employee_id) {
+            const employeeIdToUpdate = leaveRequest.employee_id;
+            console.log('📝 Updating employee status to Leave for ID:', employeeIdToUpdate);
             
             // Try updating employees table first (by id)
             const { data: empUpdate1, error: empError1 } = await supabase
                 .from('employees')
-                .update({ status: 'On-leave' })
+                .update({ status: 'Leave' })
                 .eq('id', employeeIdToUpdate);
             
             if (empError1) {
@@ -1148,19 +1248,19 @@ export const adminApi = {
                 // Try updating by employee_id field if id failed
                 const { data: empUpdate2, error: empError2 } = await supabase
                     .from('employees')
-                    .update({ status: 'On-leave' })
+                    .update({ status: 'Leave' })
                     .eq('employee_id', employeeIdToUpdate);
                 
                 if (empError2) {
                     console.warn('⚠️ Failed to update employees table by employee_id:', empError2.message);
                 } else {
-                    console.log('✅ Employee status updated to On-leave (via employee_id field)');
+                    console.log('✅ Employee status updated to Leave (via employee_id field)');
                 }
             } else {
-                console.log('✅ Employee status updated to On-leave (via id field)');
+                console.log('✅ Employee status updated to Leave (via id field)');
             }
         } else {
-            console.error('⚠️ No employee_id or user_id found in leave request, cannot update employee status');
+            console.error('⚠️ No employee_id found in leave request, cannot update employee status');
         }
         
         console.log('✅ Leave request approved successfully:', data[0]);
@@ -1168,7 +1268,7 @@ export const adminApi = {
     },
 
     async rejectLeaveRequest(requestId, reason = '') {
-        console.log('❌ Rejecting leave request:', requestId, 'Reason:', reason);
+        console.log('❌ Rejecting leave request:', requestId);
         
         // First, get the leave request details to find the employee
         const { data: leaveRequest, error: fetchError } = await supabase
@@ -1186,8 +1286,7 @@ export const adminApi = {
         const { data, error } = await supabase
             .from('leave_requests')
             .update({ 
-                status: 'rejected',
-                rejection_reason: reason
+                status: 'rejected'
             })
             .eq('id', requestId)
             .select();
@@ -1197,15 +1296,15 @@ export const adminApi = {
             throw error;
         }
         
-        // Update employee status back to "active" since leave was rejected
-        if (leaveRequest.employee_id || leaveRequest.user_id) {
-            const employeeIdToUpdate = leaveRequest.employee_id || leaveRequest.user_id;
-            console.log('📝 Updating employee status to active for ID:', employeeIdToUpdate);
+        // Update employee status back to "Active" since leave was rejected
+        if (leaveRequest.employee_id) {
+            const employeeIdToUpdate = leaveRequest.employee_id;
+            console.log('📝 Updating employee status to Active for ID:', employeeIdToUpdate);
             
             // Try updating employees table first (by id)
             const { data: empUpdate1, error: empError1 } = await supabase
                 .from('employees')
-                .update({ status: 'active' })
+                .update({ status: 'Active' })
                 .eq('id', employeeIdToUpdate);
             
             if (empError1) {
@@ -1214,19 +1313,19 @@ export const adminApi = {
                 // Try updating by employee_id field if id failed
                 const { data: empUpdate2, error: empError2 } = await supabase
                     .from('employees')
-                    .update({ status: 'active' })
+                    .update({ status: 'Active' })
                     .eq('employee_id', employeeIdToUpdate);
                 
                 if (empError2) {
                     console.warn('⚠️ Failed to update employees table by employee_id:', empError2.message);
                 } else {
-                    console.log('✅ Employee status updated to active (via employee_id field)');
+                    console.log('✅ Employee status updated to Active (via employee_id field)');
                 }
             } else {
-                console.log('✅ Employee status updated to active (via id field)');
+                console.log('✅ Employee status updated to Active (via id field)');
             }
         } else {
-            console.error('⚠️ No employee_id or user_id found in leave request, cannot update employee status');
+            console.error('⚠️ No employee_id found in leave request, cannot update employee status');
         }
         
         console.log('✅ Leave request rejected successfully:', data[0]);
@@ -1246,37 +1345,37 @@ export const adminApi = {
             .eq('status', 'approved')
             .lte('start_date', today)
             .gte('end_date', today)
-            .or(`employee_id.eq.${userId},user_id.eq.${userId}`);
+            .eq('employee_id', userId);
         
         if (error) {
             console.error('❌ Error checking active leaves:', error);
             return;
         }
         
-        // If no active leaves, set status back to active
+        // If no active leaves, set status back to Active
         if (!activeLeaves || activeLeaves.length === 0) {
-            console.log('📝 No active leaves found, setting employee status to active');
+            console.log('📝 No active leaves found, setting employee status to Active');
             
             // Try updating by employee_id first
             const { error: empError1 } = await supabase
                 .from('employees')
-                .update({ status: 'active' })
+                .update({ status: 'Active' })
                 .eq('employee_id', userId);
             
             if (empError1) {
                 // If that fails, try updating by id
                 const { error: empError2 } = await supabase
                     .from('employees')
-                    .update({ status: 'active' })
+                    .update({ status: 'Active' })
                     .eq('id', userId);
                 
                 if (empError2) {
                     console.error('❌ Failed to update employee status:', empError2);
                 } else {
-                    console.log('✅ Employee status updated to active (by id)');
+                    console.log('✅ Employee status updated to Active (by id)');
                 }
             } else {
-                console.log('✅ Employee status updated to active (by employee_id)');
+                console.log('✅ Employee status updated to Active (by employee_id)');
             }
         } else {
             console.log('📅 Employee still has active leaves, keeping On-leave status');

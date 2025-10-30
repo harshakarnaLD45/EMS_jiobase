@@ -39,6 +39,11 @@
     transition: opacity 0.2s;
 }
 
+.notification-content{
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
 .notification-close:hover {
     opacity: 1;
 }
@@ -125,6 +130,10 @@
     font-size: 0.875rem;
 }
 
+.department-select{
+    left: 25px !important;
+    top: 290px !important;
+}
 .status-filter {
     min-width: 150px;
     padding: 0.5rem;

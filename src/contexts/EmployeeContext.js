@@ -75,12 +75,12 @@ export function EmployeeProvider({ children }) {
         }
     };
 
-    const updateEmployee = async (id, updates) => {
+    const updateEmployee = async (employeeId, updates) => {
         try {
             setError(null);
-            const updatedEmployee = await employeeApi.updateEmployee(id, updates);
+            const updatedEmployee = await employeeApi.updateEmployee(employeeId, updates);
             setEmployees(prev => 
-                prev.map(emp => emp.id === id ? updatedEmployee : emp)
+                prev.map(emp => emp.employee_id === employeeId ? updatedEmployee : emp)
             );
             return updatedEmployee;
         } catch (err) {
@@ -89,11 +89,11 @@ export function EmployeeProvider({ children }) {
         }
     };
 
-    const deleteEmployee = async (id) => {
+    const deleteEmployee = async (employeeId) => {
         try {
             setError(null);
-            await employeeApi.deleteEmployee(id);
-            setEmployees(prev => prev.filter(emp => emp.id !== id));
+            await employeeApi.deleteEmployee(employeeId);
+            setEmployees(prev => prev.filter(emp => emp.employee_id !== employeeId));
         } catch (err) {
             setError(err.message);
             throw err;

@@ -178,7 +178,7 @@
   animation: fadeIn 0.2s ease-out;
 }
 .main_container{
-    padding: 15px 20px  ;
+    /* padding: 15px 20px  ; */
     box-sizing: border-box !important;
 }
 

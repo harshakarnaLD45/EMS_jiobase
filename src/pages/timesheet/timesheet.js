@@ -349,6 +349,7 @@ const Timesheet = () => {
                         }
                     </p>
                 </div>
+                 {!isAdmin() && (
                 <div className="btn_log_leave_section ">
                     <Dialog.Root open={timesheetDialogOpen} onOpenChange={setTimesheetDialogOpen}>
                         <Dialog.Trigger asChild>
@@ -371,7 +372,7 @@ const Timesheet = () => {
                             </Dialog.Content>
                         </Dialog.Portal>
                     </Dialog.Root>
-                </div>
+                </div>)}
 
 
             </div>

@@ -190,6 +190,12 @@ const LeaveRequestForm = ({ onClose }) => {
   const [documentFile, setDocumentFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeLeaveCheck, setActiveLeaveCheck] = useState({ 
+    isChecking: false, 
+    hasActiveLeave: false, 
+    activeLeave: null,
+    checked: false
+  });
   const { leaveBalance, loading, error, requestLeave } = useLeave();
 
   // Get leave types with actual balance from Supabase
@@ -205,6 +211,67 @@ const LeaveRequestForm = ({ onClose }) => {
 
   console.log('🏖️ Leave balance in form:', leaveBalance);
   console.log('🏖️ Leave types:', leaveTypes);
+
+  // Check for active leave requests on component mount and when date changes
+  React.useEffect(() => {
+    const checkActiveLeave = async () => {
+      if (!user) return;
+      
+      setActiveLeaveCheck(prev => ({ ...prev, isChecking: true }));
+      
+      try {
+        // Check for currently active leaves (today's date)
+        const activeResult = await leaveApi.checkActiveLeaveRequest(
+          user?.employee_id || user?.id, 
+          user?.id
+        );
+        
+        // If we have form dates, also check for overlaps with requested dates
+        let overlapResult = { hasOverlap: false, overlappingLeaves: [] };
+        if (formData.startDate && formData.endDate) {
+          try {
+            overlapResult = await leaveApi.checkOverlappingApprovedLeave(
+              user?.employee_id || user?.id,
+              user?.id,
+              formData.startDate,
+              formData.endDate
+            );
+            console.log('🔍 Overlap check result for dates:', formData.startDate, 'to', formData.endDate, overlapResult);
+          } catch (overlapError) {
+            console.warn('⚠️ Could not check for overlapping leaves:', overlapError);
+          }
+        }
+        
+        // Set state based on either active leave OR overlapping approved leaves
+        const hasConflict = activeResult.hasActiveLeave || overlapResult.hasOverlap;
+        const conflictingLeave = activeResult.activeLeave || (overlapResult.overlappingLeaves && overlapResult.overlappingLeaves[0]);
+        
+        setActiveLeaveCheck({
+          isChecking: false,
+          hasActiveLeave: hasConflict,
+          activeLeave: conflictingLeave,
+          checked: true
+        });
+        
+        console.log('🔍 Combined leave check result:', {
+          activeToday: activeResult.hasActiveLeave,
+          overlapsRequested: overlapResult.hasOverlap,
+          finalConflict: hasConflict,
+          conflictingLeave
+        });
+      } catch (error) {
+        console.error('❌ Error checking active leave:', error);
+        setActiveLeaveCheck({
+          isChecking: false,
+          hasActiveLeave: false,
+          activeLeave: null,
+          checked: true
+        });
+      }
+    };
+
+    checkActiveLeave();
+  }, [user, formData.startDate, formData.endDate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -276,6 +343,38 @@ const LeaveRequestForm = ({ onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    // Check for active leave request before proceeding
+    if (activeLeaveCheck.hasActiveLeave) {
+      alert('You already have an active approved leave request. Please wait until your current leave ends before submitting a new request.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Additional check: ensure there are no overlapping approved leave requests for the requested date range
+    try {
+      const employeeIdToCheck = user?.employee_id || user?.id;
+      const overlapResult = await leaveApi.checkOverlappingApprovedLeave(
+        employeeIdToCheck,
+        user?.id,
+        formData.startDate,
+        formData.endDate
+      );
+
+      if (overlapResult && overlapResult.hasOverlap) {
+        const overlapping = overlapResult.overlappingLeaves[0];
+        const overlapMsg = `An approved leave already exists (${new Date(overlapping.start_date).toLocaleDateString()} - ${new Date(overlapping.end_date).toLocaleDateString()}) for this employee. Please modify your requested dates or cancel the existing approved leave.`;
+        alert(overlapMsg);
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (err) {
+      console.error('❌ Error checking overlapping leaves before submit:', err);
+      // If the check fails, prevent accidental duplicate submissions by stopping submission and informing user
+      alert('Could not verify existing approved leaves. Please try again or contact admin.');
+      setIsSubmitting(false);
+      return;
+    }
 
     // Validate file upload for sick leave > 1 day
     if (isDocumentationRequired() && !documentFile) {
@@ -354,6 +453,74 @@ const LeaveRequestForm = ({ onClose }) => {
             Error loading leave balance: {error}
           </div>
         )}
+
+        {/* Active Leave Check Status */}
+        {/* {activeLeaveCheck.isChecking && (
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#f0f9ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '0.5rem',
+            color: '#1e40af',
+            textAlign: 'center'
+          }}>
+            Checking for active leave requests...
+          </div>
+        )} */}
+
+        {/* {activeLeaveCheck.checked && activeLeaveCheck.hasActiveLeave && (
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #ef4444',
+            borderRadius: '0.5rem',
+            color: '#dc2626',
+            textAlign: 'center'
+          }}>
+            <strong>🚫 Leave Request Conflict Detected</strong>
+            <br />
+            {activeLeaveCheck.activeLeave ? (
+              <>
+                You have an approved leave request from{' '}
+                <strong>{new Date(activeLeaveCheck.activeLeave.start_date).toLocaleDateString()} to {new Date(activeLeaveCheck.activeLeave.end_date).toLocaleDateString()}</strong>
+                {' '}({activeLeaveCheck.activeLeave.leave_type} leave).
+                <br />
+                {formData.startDate && formData.endDate ? 
+                  'This conflicts with your requested dates. Please choose different dates or cancel the existing approved leave.' :
+                  'Please wait until your current leave ends before submitting a new request.'
+                }
+              </>
+            ) : (
+              'You have an existing approved leave request that conflicts with your requested dates.'
+            )}
+          </div>
+        )} */}
+
+        {/* {activeLeaveCheck.checked && !activeLeaveCheck.hasActiveLeave && formData.startDate && formData.endDate && (
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#d1fae5',
+            border: '1px solid #34d399',
+            borderRadius: '0.5rem',
+            color: '#065f46',
+            textAlign: 'center'
+          }}>
+            ✅ No conflicts found for {new Date(formData.startDate).toLocaleDateString()} to {new Date(formData.endDate).toLocaleDateString()}. You can submit this leave request.
+          </div>
+        )} */}
+
+        {/* {activeLeaveCheck.checked && !activeLeaveCheck.hasActiveLeave && (!formData.startDate || !formData.endDate) && (
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#f0f9ff',
+            border: '1px solid #60a5fa',
+            borderRadius: '0.5rem',
+            color: '#1e40af',
+            textAlign: 'center'
+          }}>
+            ℹ️ Please select your leave dates to check for conflicts with existing approved leaves.
+          </div>
+        )} */}
 
         {/* Leave Type */}
         <div style={styles.formGroup}>
@@ -555,11 +722,15 @@ const LeaveRequestForm = ({ onClose }) => {
             type="submit"
             style={{
               ...styles.submitButton,
-              ':hover': { backgroundColor: '#2563eb' }
+              backgroundColor: (activeLeaveCheck.hasActiveLeave || isSubmitting || loading) ? '#9ca3af' : '#3b82f6',
+              cursor: (activeLeaveCheck.hasActiveLeave || isSubmitting || loading) ? 'not-allowed' : 'pointer',
+              ':hover': { backgroundColor: (activeLeaveCheck.hasActiveLeave || isSubmitting || loading) ? '#9ca3af' : '#2563eb' }
             }}
-            disabled={isSubmitting || loading}
+            disabled={isSubmitting || loading || activeLeaveCheck.hasActiveLeave}
           >
-            {isSubmitting ? 'Submitting...' : 'Submit Leave Request'}
+            {isSubmitting ? 'Submitting...' : 
+             activeLeaveCheck.hasActiveLeave ? 'Cannot Submit - Active Leave Exists' :
+             'Submit Leave Request'}
           </button>
         </div>
       </form>

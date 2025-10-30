@@ -1,11 +1,13 @@
 import React from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import '../../pages/employeeManagement/EmployeeManagement.css';
+
 
 const Notification = ({ 
     notification, 
     onClose,
     autoClose = true,
-    autoCloseDelay = 3000
+    autoCloseDelay = 30000
 }) => {
     React.useEffect(() => {
         if (notification && autoClose) {

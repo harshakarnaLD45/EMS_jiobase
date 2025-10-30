@@ -27,6 +27,39 @@ const AdminDashboard = () => {
 
             console.log('🚀 Starting to load dashboard data...');
 
+            // Try optimized aggregated stats first (reads directly from employees table)
+            try {
+                console.log('📈 Attempting to fetch aggregated dashboard stats...');
+                const quickStats = await adminApi.getDashboardStats();
+                if (quickStats && typeof quickStats.totalEmployees !== 'undefined') {
+                    console.log('✅ Aggregated dashboard stats received:', quickStats);
+                    setDashboardStats({
+                        totalEmployees: {
+                            count: quickStats.totalEmployees || 0,
+                            change: `+${quickStats.newEmployeesThisMonth || 0} this month`
+                        },
+                        activeToday: {
+                            count: quickStats.activeEmployeesToday || 0,
+                            rate: quickStats.totalEmployees > 0 ?
+                                `${Math.round(((quickStats.activeEmployeesToday || 0) / (quickStats.totalEmployees || 1)) * 100)}% attendance` :
+                                '0% attendance'
+                        },
+                        onLeave: {
+                            count: quickStats.employeesOnLeave || 0,
+                            details: quickStats.employeesOnLeave > 0 ? `${quickStats.employeesOnLeave} currently on leave` : 'No one on leave today'
+                        },
+                        pendingApprovals: {
+                            count: (quickStats.pendingRequests || 0) + (quickStats.pendingTimesheets || 0),
+                            details: quickStats.pendingRequests > 0 || quickStats.pendingTimesheets > 0 ?
+                                `${quickStats.pendingRequests} leave requests + ${quickStats.pendingTimesheets} timesheets` :
+                                'All items processed'
+                        }
+                    });
+                }
+            } catch (quickStatsError) {
+                console.warn('⚠️ Could not fetch aggregated dashboard stats (fallback to manual):', quickStatsError?.message || quickStatsError);
+            }
+
             // Debug database connection first
             try {
                 const debugResult = await adminApi.debugDatabase();
@@ -319,6 +352,33 @@ const AdminDashboard = () => {
             console.log('🎯 Setting recent activity:', activity);
             setRecentActivity(activity || []);
 
+            // Check and update employee statuses after leave ends
+            try {
+                console.log('🔄 Checking employee statuses after leave periods...');
+                const today = new Date().toISOString().slice(0, 10);
+                
+                // Get all employees who might need status updates
+                const employeesToCheck = allStaff.filter(emp => 
+                    emp.status && (emp.status.toLowerCase().includes('leave') || emp.status.toLowerCase() === 'on-leave')
+                );
+                
+                console.log('👥 Found employees with leave status to check:', employeesToCheck.length);
+                
+                for (const employee of employeesToCheck) {
+                    try {
+                        await adminApi.updateEmployeeStatusAfterLeave(employee.employee_id || employee.id);
+                    } catch (statusError) {
+                        console.warn('⚠️ Could not update status for employee:', employee.id, statusError.message);
+                    }
+                }
+                
+                if (employeesToCheck.length > 0) {
+                    console.log('✅ Completed employee status checks');
+                }
+            } catch (statusCheckError) {
+                console.warn('⚠️ Error during employee status check:', statusCheckError.message);
+            }
+
             if (activity && activity.length > 0) {
                 console.log('✅ Successfully loaded real data from Supabase');
             } else {
@@ -420,8 +480,103 @@ const AdminDashboard = () => {
     };
 
     // Simplified handler functions that use the common handleStatusChange
-    const handleApproveRequest = (requestId) => handleStatusChange(requestId, 'leave', 'approve');
-    const handleRejectRequest = (requestId, reason) => handleStatusChange(requestId, 'leave', 'reject', reason);
+    const handleApproveRequest = async (requestId) => {
+        if (!requestId) {
+            console.error('No leave request ID provided');
+            return;
+        }
+
+        try {
+            setActionLoading(requestId);
+            setActionStatus(prev => ({ ...prev, [requestId]: 'approving' }));
+
+            // Use adminApi.approveLeaveRequest which includes employee status update
+            const result = await adminApi.approveLeaveRequest(requestId);
+            
+            // Update status and show message
+            setActionStatus(prev => ({ ...prev, [requestId]: 'approved' }));
+            setError('Leave request approved successfully! Employee status updated.');
+
+            // Refresh data to show updated status
+            setTimeout(() => {
+                loadDashboardData();
+            }, 1000);
+
+            // Clean up status after delay
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[requestId];
+                    return newStatus;
+                });
+                setError(null);
+            }, 3000);
+
+        } catch (error) {
+            console.error('Error approving leave request:', error);
+            setActionStatus(prev => ({ ...prev, [requestId]: 'error' }));
+            setError(`Error approving leave request: ${error.message}`);
+            
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[requestId];
+                    return newStatus;
+                });
+            }, 3000);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleRejectRequest = async (requestId, reason = 'Rejected by admin') => {
+        if (!requestId) {
+            console.error('No leave request ID provided');
+            return;
+        }
+
+        try {
+            setActionLoading(requestId);
+            setActionStatus(prev => ({ ...prev, [requestId]: 'rejecting' }));
+
+            // Use adminApi.rejectLeaveRequest which includes employee status update
+            const result = await adminApi.rejectLeaveRequest(requestId, reason);
+            
+            // Update status and show message
+            setActionStatus(prev => ({ ...prev, [requestId]: 'rejected' }));
+            setError('Leave request rejected successfully! Employee status updated.');
+
+            // Refresh data to show updated status
+            setTimeout(() => {
+                loadDashboardData();
+            }, 1000);
+
+            // Clean up status after delay
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[requestId];
+                    return newStatus;
+                });
+                setError(null);
+            }, 3000);
+
+        } catch (error) {
+            console.error('Error rejecting leave request:', error);
+            setActionStatus(prev => ({ ...prev, [requestId]: 'error' }));
+            setError(`Error rejecting leave request: ${error.message}`);
+            
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[requestId];
+                    return newStatus;
+                });
+            }, 3000);
+        } finally {
+            setActionLoading(null);
+        }
+    };
     const handleApproveTimesheet = (timesheetId) => handleStatusChange(timesheetId, 'timesheet', 'approve');
     const handleRejectTimesheet = (timesheetId, reason) => handleStatusChange(timesheetId, 'timesheet', 'reject', reason);
     // Format pending requests for display (show all if no status field)
@@ -591,7 +746,7 @@ const AdminDashboard = () => {
                         <Calendar size={15} />
                     </div>
                     <div className="stat-info">
-                        <h3 className='bodyMediumText3 '>On Leave</h3>
+                        <h3 className='bodyMediumText3 '>Leave</h3>
                         <div className="stat-number bodyMediumText1">{dashboardStats.onLeave.count}</div>
                         <div className="stat-change bodyRegularText5">{dashboardStats.onLeave.details}</div>
                     </div>

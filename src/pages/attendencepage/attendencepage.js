@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/ta
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Badge } from "../../components/ui/badge";
-import { timesheetApi, employeeApi } from "../../utils/supabase";
+import { timesheetApi, leaveApi, employeeApi } from "../../utils/supabase";
 import { useEmployees } from "../../contexts/EmployeeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -33,6 +33,7 @@ export default function Attendance() {
     const [selectedYear, setSelectedYear] = useState("2025");
     const [activeView, setActiveView] = useState("calendar");
     const [timesheets, setTimesheets] = useState([]);
+    const [leaveRequests, setLeaveRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentEmployee, setCurrentEmployee] = useState(null);
@@ -53,46 +54,129 @@ export default function Attendance() {
         }));
     };
 
-    // Calculate attendance statistics from real timesheet data (role-based)
+    // Get attendance status for a specific day based on timesheet and leave data
+    const getDayAttendanceStatus = (day) => {
+        const monthIndex = months.indexOf(selectedMonth);
+        const year = parseInt(selectedYear);
+        
+        // Create date string directly to avoid timezone issues
+        const paddedMonth = String(monthIndex + 1).padStart(2, '0');
+        const paddedDay = String(day).padStart(2, '0');
+        const dateString = `${year}-${paddedMonth}-${paddedDay}`;
+        
+        // Create date object for day calculations
+        const date = new Date(year, monthIndex, day);
+
+        // Check for approved leave requests first (highest priority)
+        const approvedLeave = leaveRequests?.find(leave => {
+            if (leave.status !== 'approved') return false;
+            
+            // Normalize all dates to YYYY-MM-DD format for reliable comparison
+            const leaveStartDate = leave.start_date.split('T')[0]; // Remove time part if present
+            const leaveEndDate = leave.end_date.split('T')[0]; // Remove time part if present
+            
+            // Compare using string comparison since all are in YYYY-MM-DD format
+            const isInRange = dateString >= leaveStartDate && dateString <= leaveEndDate;
+            
+            // Debug logging for multi-day leave issue
+            if (dateString === '2025-10-17' || dateString === '2025-10-18') {
+                console.log(`🔍 Leave check for ${dateString}:`, {
+                    leaveStartDate,
+                    leaveEndDate,
+                    dateString,
+                    isInRange,
+                    leaveType: leave.leave_type
+                });
+            }
+            
+            return isInRange;
+        });
+
+        if (approvedLeave) {
+            return 'leave'; // Approved leave takes precedence
+        }
+
+        // Check timesheet status for this date (exact string match)
+        const dayTimesheets = timesheets.filter(timesheet => 
+            timesheet.date === dateString
+        );
+
+        if (dayTimesheets.length > 0) {
+            // Check if any timesheet is approved
+            const hasApprovedTimesheet = dayTimesheets.some(ts => 
+                ts.status === 'approved' || !ts.status // Treat null/undefined as approved for backward compatibility
+            );
+            
+            // Check if any timesheet is rejected
+            const hasRejectedTimesheet = dayTimesheets.some(ts => 
+                ts.status === 'rejected'
+            );
+
+            if (hasApprovedTimesheet && !hasRejectedTimesheet) {
+                return 'present'; // Approved timesheet = Present
+            } else if (hasRejectedTimesheet) {
+                return 'half-day'; // Rejected timesheet = Half-day
+            }
+        }
+
+        // Check if it's a weekend (only Sunday)
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek === 0) return 'weekend'; // Only Sunday is weekend
+
+        return null; // No data for workdays (Monday-Saturday)
+    };
+
+    // Calculate attendance statistics from timesheet and leave data (role-based)
     const attendanceStats = React.useMemo(() => {
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
         const daysInCurrentMonth = new Date(year, monthIndex + 1, 0).getDate();
-
-        // Filter timesheets for selected month/year
-        // Note: timesheets are already filtered by employee in loadTimesheetData()
-        const monthlyTimesheets = timesheets.filter(timesheet => {
-            const timesheetDate = new Date(timesheet.date);
-            return timesheetDate.getMonth() === monthIndex &&
-                timesheetDate.getFullYear() === year;
-        });
-
-        // Count working days (excluding weekends)
+        
+        // Count working days (Monday-Saturday, excluding only Sunday)
         let workingDays = 0;
         for (let day = 1; day <= daysInCurrentMonth; day++) {
             const date = new Date(year, monthIndex, day);
             const dayOfWeek = date.getDay();
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
+            // Count Monday-Saturday as working days (exclude only Sunday)
+            if (dayOfWeek !== 0) {
                 workingDays++;
             }
         }
 
-        // Calculate present days (unique dates with timesheets)
-        const presentDates = new Set();
-        monthlyTimesheets.forEach(timesheet => {
-            if (timesheet.status === 'completed' || timesheet.status === 'approved' ||
-                timesheet.total_hours > 0 || timesheet.clock_in_time) {
-                presentDates.add(timesheet.date);
+        // Calculate daily attendance status for the month
+        let presentDays = 0;
+        let leaveDays = 0;
+        let halfDays = 0;
+        
+        for (let day = 1; day <= daysInCurrentMonth; day++) {
+            const status = getDayAttendanceStatus(day);
+            switch (status) {
+                case 'present':
+                    presentDays++;
+                    break;
+                case 'leave':
+                    leaveDays++;
+                    break;
+                case 'half-day':
+                    halfDays++;
+                    break;
+                // 'weekend' and null (no data) don't count toward any category
             }
-        });
+        }
+
+        // Calculate absent days (working days with no data)
+        const absentDays = Math.max(0, workingDays - presentDays - leaveDays - halfDays);
 
         return {
             workingDays,
-            present: presentDates.size,
-            absent: Math.max(0, workingDays - presentDates.size),
-            holidays: 0, // This could be enhanced with a holidays API
+            present: presentDays,
+            absent: absentDays,
+            leave: leaveDays,
+            halfDay: halfDays,
+            holidays: 0, // Can be extended for holiday data
+            attendanceRate: workingDays > 0 ? Math.round(((presentDays + (halfDays * 0.5)) / workingDays) * 100) : 0
         };
-    }, [timesheets, selectedMonth, selectedYear]);
+    }, [timesheets, leaveRequests, selectedMonth, selectedYear]);
 
     // Load timesheet data and current employee info
     useEffect(() => {
@@ -218,68 +302,107 @@ export default function Attendance() {
             setError(null);
 
             if (isAdmin()) {
-                // Admin view - fetch all timesheets
-                console.log('👑 Admin view: Loading all timesheets');
-                const allTimesheets = await timesheetApi.getAllTimesheets();
-                console.log('📊 Loaded all timesheets for admin:', allTimesheets.length);
+                // Admin view - fetch all timesheets and leave requests
+                console.log('👑 Admin view: Loading all attendance data');
+                const [allTimesheets, allLeaveRequests] = await Promise.all([
+                    timesheetApi.getAllTimesheets(),
+                    leaveApi.getAllLeaveRequestsWithEmployees()
+                ]);
+                console.log('📊 Loaded for admin:', {
+                    timesheets: allTimesheets.length,
+                    leaveRequests: allLeaveRequests.length
+                });
                 
                 // Apply employee filter if selected
                 let filteredTimesheets = allTimesheets;
+                let filteredLeaveRequests = allLeaveRequests;
+                
                 if (filters.employee !== 'all') {
                     filteredTimesheets = allTimesheets.filter(ts => 
                         ts.employee_name === filters.employee
                     );
-                    console.log(`📊 Filtered to ${filteredTimesheets.length} timesheets for ${filters.employee}`);
+                    
+                    filteredLeaveRequests = allLeaveRequests.filter(lr => {
+                        const employeeName = lr.employees?.name || 
+                                           `${lr.employees?.first_name || ''} ${lr.employees?.last_name || ''}`.trim() ||
+                                           'Unknown Employee';
+                        return employeeName === filters.employee;
+                    });
+                    
+                    console.log(`📊 Filtered for ${filters.employee}:`, {
+                        timesheets: filteredTimesheets.length,
+                        leaveRequests: filteredLeaveRequests.length
+                    });
                 }
                 
+                console.log('📋 Sample timesheets:', filteredTimesheets.slice(0, 3));
+                console.log('📅 Sample leave requests:', filteredLeaveRequests.slice(0, 3));
+                
                 setTimesheets(filteredTimesheets);
+                setLeaveRequests(filteredLeaveRequests);
             } else if (isEmployee() && currentEmployee) {
-                // Employee view - fetch all timesheets and filter client-side for now
-                // This ensures we get the same data structure as admin view
-                console.log('👤 Employee view: Loading all timesheets and filtering for', currentEmployee.email);
-                const allTimesheets = await timesheetApi.getAllTimesheets();
-                console.log('📊 Loaded all timesheets:', allTimesheets.length);
-
+                // Employee view - fetch personal timesheets and leave requests
+                console.log('👤 Employee view: Loading personal attendance data for', currentEmployee.email);
+                
                 const targetEmployeeId = currentEmployee.employee_id || currentEmployee.id;
-                console.log('🆔 Filtering for employee ID:', targetEmployeeId);
-                console.log('🔍 Sample timesheet employee IDs:', allTimesheets.slice(0, 5).map(ts => ts.employee_id));
-
-                // Filter for current employee only - try multiple ID matching strategies
-                let employeeTimesheets = allTimesheets.filter(timesheet =>
-                    timesheet.employee_id === targetEmployeeId
-                );
-
-                // If no results with exact match, try string conversion
-                if (employeeTimesheets.length === 0) {
-                    employeeTimesheets = allTimesheets.filter(timesheet =>
-                        String(timesheet.employee_id) === String(targetEmployeeId)
-                    );
-                    if (employeeTimesheets.length > 0) {
-                        console.log('📊 Found timesheets with string ID matching');
-                    }
+                console.log('🆔 Loading data for employee ID:', targetEmployeeId);
+                
+                try {
+                    // Fetch both timesheets and leave requests for the employee
+                    const [employeeTimesheets, employeeLeaveRequests] = await Promise.all([
+                        timesheetApi.getTimesheetsByEmployeeId(targetEmployeeId),
+                        leaveApi.getLeaveRequests(targetEmployeeId)
+                    ]);
+                    
+                    console.log('📊 Personal data loaded:', {
+                        timesheets: employeeTimesheets.length,
+                        leaveRequests: employeeLeaveRequests.length
+                    });
+                    
+                    setTimesheets(employeeTimesheets);
+                    setLeaveRequests(employeeLeaveRequests);
+                    
+                } catch (personalDataError) {
+                    console.error('❌ Error loading personal data:', personalDataError);
+                    // Fallback: try with alternative ID or load all and filter
+                    console.log('🔄 Trying fallback approach...');
+                    
+                    const [allTimesheets, allLeaveRequests] = await Promise.all([
+                        timesheetApi.getAllTimesheets(),
+                        leaveApi.getAllLeaveRequestsWithEmployees()
+                    ]);
+                    
+                    // Filter for current employee
+                    const employeeTimesheets = allTimesheets.filter(timesheet => {
+                        return timesheet.employee_id === targetEmployeeId ||
+                               String(timesheet.employee_id) === String(targetEmployeeId) ||
+                               timesheet.employees?.email === currentEmployee.email;
+                    });
+                    
+                    const employeeLeaveRequests = allLeaveRequests.filter(lr => {
+                        return lr.employee_id === targetEmployeeId ||
+                               String(lr.employee_id) === String(targetEmployeeId) ||
+                               lr.employees?.email === currentEmployee.email;
+                    });
+                    
+                    console.log('📊 Fallback filtered data:', {
+                        timesheets: employeeTimesheets.length,
+                        leaveRequests: employeeLeaveRequests.length
+                    });
+                    
+                    setTimesheets(employeeTimesheets);
+                    setLeaveRequests(employeeLeaveRequests);
                 }
-
-                // If still no results, try matching by employee email from joined data
-                if (employeeTimesheets.length === 0) {
-                    employeeTimesheets = allTimesheets.filter(timesheet =>
-                        timesheet.employees?.email === currentEmployee.email
-                    );
-                    if (employeeTimesheets.length > 0) {
-                        console.log('📊 Found timesheets with email matching');
-                    }
-                }
-
-                console.log('📊 Filtered employee timesheets:', employeeTimesheets.length);
-                console.log('📊 Sample filtered timesheet:', employeeTimesheets[0]);
-                setTimesheets(employeeTimesheets);
             } else if (isEmployee() && !currentEmployee) {
                 // Employee but no current employee data yet - wait
                 console.log('⏳ Employee detected but no employee data yet, waiting...');
                 setTimesheets([]);
+                setLeaveRequests([]);
             } else {
                 // Default fallback - should not happen in normal cases
                 console.log('❓ Unknown user type, no data loaded');
                 setTimesheets([]);
+                setLeaveRequests([]);
             }
         } catch (err) {
             console.error('❌ Error loading timesheet data:', err);
@@ -301,7 +424,6 @@ export default function Attendance() {
 
     // Process timesheet data for table display
     const tableData = React.useMemo(() => {
-        console.log('📋 Processing table data from timesheets:', timesheets.length);
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
 
@@ -311,11 +433,6 @@ export default function Attendance() {
             return timesheetDate.getMonth() === monthIndex &&
                 timesheetDate.getFullYear() === year;
         });
-
-        console.log('📋 Monthly timesheets for table:', monthlyTimesheets.length);
-        if (monthlyTimesheets.length > 0) {
-            console.log('📋 Sample monthly timesheet:', monthlyTimesheets[0]);
-        }
 
         // Group by date and aggregate data
         const groupedByDate = {};
@@ -371,40 +488,109 @@ export default function Attendance() {
         }
     };
 
-    // Get attendance status for a specific day
-    const getDayAttendanceStatus = (day) => {
-        const monthIndex = months.indexOf(selectedMonth);
-        const year = parseInt(selectedYear);
-        const date = new Date(year, monthIndex, day);
-        const dateString = date.toISOString().split('T')[0];
+    // Helper function to safely parse tasks JSON and calculate total hours
+    const parseTimesheetTasks = (tasksData) => {
+        if (!tasksData) return { parsedTasks: [], totalHours: 0 };
 
-        const dayTimesheets = timesheets.filter(timesheet =>
-            timesheet.date === dateString
-        );
+        try {
+            let tasks = [];
+            
+            // Handle different task data formats
+            if (typeof tasksData === 'string') {
+                tasks = JSON.parse(tasksData);
+            } else if (Array.isArray(tasksData)) {
+                tasks = tasksData;
+            } else if (typeof tasksData === 'object') {
+                tasks = [tasksData];
+            }
 
-        if (dayTimesheets.length > 0) {
-            return dayTimesheets.some(ts => ts.total_hours > 0) ? 'present' : 'absent';
+            // Ensure tasks is an array
+            if (!Array.isArray(tasks)) {
+                console.warn('⚠️ Tasks data is not an array:', tasksData);
+                return { parsedTasks: [], totalHours: 0 };
+            }
+
+            // Calculate total hours from timeSpent fields
+            const totalHours = tasks.reduce((sum, task) => {
+                const timeSpent = parseFloat(task.timeSpent || task.time_spent || 0);
+                return sum + timeSpent;
+            }, 0);
+
+            return { parsedTasks: tasks, totalHours };
+        } catch (error) {
+            console.error('❌ Error parsing tasks JSON:', error, 'Original data:', tasksData);
+            return { parsedTasks: [], totalHours: 0 };
+        }
+    };
+
+    // Helper function to get employee display name with fallback logic
+    const getEmployeeDisplayName = (timesheet) => {
+        const employee = timesheet.employees;
+        
+        if (!employee) {
+            console.warn('⚠️ No employee data found for timesheet:', timesheet);
+            return 'Unknown Employee';
         }
 
-        const dayOfWeek = date.getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) return 'weekend';
+        // Priority 1: Use name field if available
+        if (employee.name && employee.name.trim()) {
+            return employee.name.trim();
+        }
 
-        return null; // No data
+        // Priority 2: Combine first_name and last_name
+        const firstName = employee.first_name || '';
+        const lastName = employee.last_name || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        
+        if (fullName) {
+            return fullName;
+        }
+
+        // Priority 3: Use email as fallback
+        if (employee.email) {
+            return employee.email;
+        }
+
+        // Priority 4: Use employee_id as final fallback
+        if (employee.employee_id) {
+            return `Employee ${employee.employee_id}`;
+        }
+
+        return 'Unknown Employee';
     };
 
     // Get detailed data for a specific day (used by info popup)
     const getDayDetails = (day) => {
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
+        
+        // Create date string directly to avoid timezone issues (same as getDayAttendanceStatus)
+        const paddedMonth = String(monthIndex + 1).padStart(2, '0');
+        const paddedDay = String(day).padStart(2, '0');
+        const dateString = `${year}-${paddedMonth}-${paddedDay}`;
+        
         const date = new Date(year, monthIndex, day);
-        const dateString = date.toISOString().split('T')[0];
 
+        // Get timesheet data for this specific date
         const dayTimesheets = timesheets.filter(ts => ts.date === dateString);
+        
+        // Get leave request data for this date (using consistent string comparison)
+        const dayLeaveRequests = leaveRequests.filter(leave => {
+            if (leave.status !== 'approved') return false;
+            
+            // Normalize dates to YYYY-MM-DD format for reliable comparison
+            const leaveStartDate = leave.start_date.split('T')[0]; // Remove time part if present
+            const leaveEndDate = leave.end_date.split('T')[0]; // Remove time part if present
+            
+            // Compare using string comparison since all are in YYYY-MM-DD format
+            return dateString >= leaveStartDate && dateString <= leaveEndDate;
+        });
 
         return {
             date,
             dateString,
             dayTimesheets,
+            dayLeaveRequests,
             status: getDayAttendanceStatus(day),
         };
     };
@@ -442,7 +628,7 @@ export default function Attendance() {
     }
 
     return (
-        <div style={{ padding: '24px', minHeight: '100vh', backgroundColor: 'var(--background)' }}>
+        <div style={{  minHeight: '100vh', backgroundColor: 'var(--background)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
@@ -450,7 +636,7 @@ export default function Attendance() {
                             {isEmployee() ? 'My Attendance' : 'Attendance & Calendar'}
                         </h1>
                         <Badge variant={isAdmin() ? 'default' : 'secondary'} style={{ fontSize: '11px' }}>
-                            {isAdmin() ? '👑 Admin View' : '👤 Employee View'}
+                            {isAdmin() ? '👑 Admin View' : ''}
                         </Badge>
                     </div>
                     <p style={{ color: 'var(--muted-foreground)' }}>
@@ -478,14 +664,18 @@ export default function Attendance() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Employees</SelectItem>
-                                {/* Get unique employee names from timesheets */}
-                                {Array.from(new Set(timesheets.map(ts => ts.employee_name).filter(Boolean)))
-                                    .sort()
-                                    .map(employeeName => (
-                                        <SelectItem key={employeeName} value={employeeName}>
-                                            {employeeName}
-                                        </SelectItem>
-                                    ))
+                                {/* Show all employees from the system, not just those with timesheets */}
+                                {employees
+                                    .filter(emp => emp.status !== 'Terminated') // Only show active employees
+                                    .sort((a, b) => (a.name || `${a.first_name} ${a.last_name}`).localeCompare(b.name || `${b.first_name} ${b.last_name}`))
+                                    .map(employee => {
+                                        const employeeName = employee.name || `${employee.first_name} ${employee.last_name}`.trim();
+                                        return (
+                                            <SelectItem key={employee.id} value={employeeName}>
+                                                {employeeName}
+                                            </SelectItem>
+                                        );
+                                    })
                                 }
                             </SelectContent>
                         </Select>
@@ -571,9 +761,9 @@ export default function Attendance() {
                 <Card>
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
-                            <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>leave</p>
+                            <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave</p>
                             <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f81515ff' }}>
-                                {attendanceStats.absent}
+                                {attendanceStats.leave || 0}
                             </div>
                         </div>
                         <div style={{
@@ -588,34 +778,51 @@ export default function Attendance() {
                 <Card>
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
-                            <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Holidays</p>
-                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>
-                                {attendanceStats.holidays}
+                            <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Half-Day</p>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#a855f7' }}>
+                                {attendanceStats.halfDay || 0}
                             </div>
                         </div>
                         <div style={{
                             display: 'flex',
                             borderRadius: '6px',
                         }}>
-                            <Palmtree style={{ width: '16px' }} />
+                            <div style={{ width: '16px', height: '16px', fontSize: '16px' }}>◐</div>
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* <Card>
+                    <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
+                        <div>
+                            <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Absent</p>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>
+                                {attendanceStats.absent}
+                            </div>
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            borderRadius: '6px',
+                        }}>
+                            <div style={{ width: '16px', height: '16px', backgroundColor: '#fee2e2', border: '1px solid #ef4444', borderRadius: '2px' }} />
+                        </div>
+                    </CardContent>
+                </Card> */}
             </div>
 
             <Card>
                 <CardContent style={{ padding: '24px' }}>
                     <Tabs value={activeView} onValueChange={setActiveView} style={{ width: '100%' }}>
-                        <TabsList style={{ display: 'grid', width: '30%', gridTemplateColumns: '1fr 1fr' }}>
+                        {/* <TabsList style={{ display: 'grid', width: '30%', gridTemplateColumns: '1fr 1fr' }}>
                             <TabsTrigger value="calendar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {/* <LayoutGrid style={{ height: '16px', width: '16px' }} /> */}
+                                <LayoutGrid style={{ height: '16px', width: '16px' }} />
                                 Calendar View
                             </TabsTrigger>
                             <TabsTrigger value="table" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {/* <List style={{ height: '16px', width: '16px' }} /> */}
+                                <List style={{ height: '16px', width: '16px' }} />
                                 Table View
                             </TabsTrigger>
-                        </TabsList>
+                        </TabsList> */}
 
                         <TabsContent value="calendar" style={{ marginTop: '24px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -652,20 +859,22 @@ export default function Attendance() {
                                     {Array.from({ length: daysInMonth }).map((_, index) => {
                                         const day = index + 1;
                                         const dayOfWeek = (firstDay + index) % 7;
-                                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
                                         const attendanceStatus = getDayAttendanceStatus(day);
                                         let statusBgColor = 'var(--card)';
                                         let statusIndicator = null;
 
-                                        if (isWeekend) {
-                                            statusBgColor = 'var(--muted)';
+                                        if (attendanceStatus === 'weekend') {
+                                            statusBgColor = '#dadaddff';
                                         } else if (attendanceStatus === 'present') {
                                             statusBgColor = '#dcfce7';
                                             statusIndicator = '●';
-                                        } else if (attendanceStatus === 'absent') {
+                                        } else if (attendanceStatus === 'leave') {
                                             statusBgColor = '#fee2e2';
                                             statusIndicator = '●';
+                                        } else if (attendanceStatus === 'half-day') {
+                                            statusBgColor = '#e3d2f7ff';
+                                            statusIndicator = '◐';
                                         }
 
                                         const borderColor = (hoveredDay === day || infoDay === day) ? 'var(--primary)' : 'var(--border)';
@@ -747,7 +956,7 @@ export default function Attendance() {
                                             backgroundColor: '#dcfce7',
                                             border: '1px solid #4ade80'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Present ({attendanceStats.present} days)</span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Present </span>
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -758,29 +967,38 @@ export default function Attendance() {
                                             backgroundColor: '#fee2e2',
                                             border: '1px solid #f87171'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave</span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
                                             width: '16px',
                                             height: '16px',
                                             borderRadius: '4px',
-                                            backgroundColor: '#dbeafe',
-                                            border: '1px solid #60a5fa'
+                                            backgroundColor: '#e3d2f7ff',
+                                            border: '1px solid #a855f7'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Holiday</span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Half-day </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
                                             width: '16px',
                                             height: '16px',
                                             borderRadius: '4px',
-                                            // backgroundColor: 'var(--muted) ',
-                                            backgroundColor: '#e8effaff ',
+                                            backgroundColor: '#d6d7d8ff',
+                                            border: '1px solid #cccdcfff'
+                                        }} />
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Weekend </span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{
+                                            width: '16px',
+                                            height: '16px',
+                                            borderRadius: '4px',
+                                            backgroundColor: 'var(--card)',
                                             border: '1px solid var(--border)'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Weekend</span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>No Data ({attendanceStats.absent || 0} days)</span>
                                     </div>
+                                </div>
                                 </div>
                             </div>
 
@@ -816,89 +1034,249 @@ export default function Attendance() {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                                 <div>
                                                     <strong style={{ fontSize: 16 }}>Details for {details.date.toLocaleDateString()}</strong>
-                                                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{details.dateString}</div>
+                                                    {/* <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{details.dateString}</div> */}
                                                 </div>
                                                 <button onClick={() => setInfoDay(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 18 }}>✕</button>
                                             </div>
 
                                             <div style={{ marginBottom: 12 }}>
                                                 <div style={{ fontSize: 13, marginBottom: 6 }}>Status: <strong>{details.status || 'No Data'}</strong></div>
-                                                <div style={{ fontSize: 13 }}>Records: {details.dayTimesheets.length}</div>
+                                                <div style={{ fontSize: 13 }}>Timesheet Records: {details.dayTimesheets.length}</div>
+                                                {details.dayLeaveRequests.length > 0 && (
+                                                    <div style={{ fontSize: 13 }}>Leave Records: {details.dayLeaveRequests.length}</div>
+                                                )}
                                             </div>
 
-                                            {details.dayTimesheets.length > 0 ? (
-                                                <div style={{ maxHeight: 220, overflow: 'auto', borderTop: '1px solid #eee', paddingTop: 8 }}>
-                                                    {details.dayTimesheets.map((ts, i) => (
-                                                        <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #f5f5f5' }}>
-                                                            <div style={{ fontSize: 13 }}><strong>{ts.employees?.name || `${ts.employees?.first_name || ''} ${ts.employees?.last_name || ''}`.trim() || 'Unknown'}</strong></div>
-                                                            <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{ts.total_hours ? `Hours: ${ts.total_hours}` : 'Hours: -'}</div>
-                                                            <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Status: {ts.status || 'n/a'}</div>
+                                            {/* PRIORITY HIERARCHY: Show Leave Information OR Timesheet Information (never both) */}
+                                            {details.dayLeaveRequests.length > 0 ? (
+                                                /* PRIORITY 1: Approved Leave - Show ONLY leave details, hide timesheets */
+                                                <div>
+                                                    <div style={{ marginBottom: 12, padding: 12,  borderRadius: 6, border: '1px solid #a5fca9ff' }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            📅 Approved Leave Request
                                                         </div>
-                                                    ))}
+                                                        {details.dayLeaveRequests.map((leave, i) => {
+                                                            // Resolve employee display name for the leave record with several fallbacks
+                                                            const employeeName =
+                                                                leave.employee_name ||
+                                                                leave.employees?.name ||
+                                                                (leave.employees ? `${leave.employees.first_name || ''} ${leave.employees.last_name || ''}`.trim() : '') ||
+                                                                leave.employee?.name ||
+                                                                `${leave.first_name || ''} ${leave.last_name || ''}`.trim() ||
+                                                                'Unknown Employee';
+
+                                                            return (
+                                                                <div key={i} style={{ 
+                                                                    fontSize: 13, 
+                                                                    color: '#7f1d1d',
+                                                                    backgroundColor: 'rgba(255,255,255,0.7)',
+                                                                    padding: 8,
+                                                                    borderRadius: 4,
+                                                                    marginBottom: 6
+                                                                }}>
+                                                                    {/* Employee reference */}
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                                                        <div style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>👤 {employeeName}</div>
+                                                                        <div style={{ marginLeft: 'auto', fontSize: 12, color: '#065f46', fontWeight: 700 }}>{leave.status === 'approved' ? 'Approved' : (leave.status || '')}</div>
+                                                                    </div>
+
+                                                                    <div style={{ fontWeight: '600', marginBottom: 4 }}>
+                                                                         Type: <span style={{ color: '#dc2626', fontWeight: 500 }}>{leave.leave_type}</span>
+                                                                    </div>
+                                                                    <div style={{ marginBottom: 4 }}>
+                                                                         Reason: {leave.reason}
+                                                                    </div>
+                                                                    <div style={{ marginBottom: 4 }}>
+                                                                        Duration: {new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             ) : (
-                                                <div style={{ padding: 12, color: 'var(--muted-foreground)' }}>No timesheet records for this day.</div>
+                                                /* PRIORITY 2: Timesheet Only - Show timesheet tasks when no approved leave */
+                                                details.dayTimesheets.length > 0 ? (
+                                                    <div style={{ maxHeight: 280, overflow: 'auto', borderTop: '1px solid #eee', paddingTop: 8 }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            ⏰ Timesheet Tasks
+                                                        </div>
+                                                        
+                                                        {details.dayTimesheets.map((ts, i) => {
+                                                            // Parse tasks and calculate total hours
+                                                            const { parsedTasks, totalHours } = parseTimesheetTasks(ts.tasks);
+                                                            const employeeName = getEmployeeDisplayName(ts);
+                                                            
+                                                            // Use calculated hours or fallback to total_hours field
+                                                            const displayHours = totalHours > 0 ? totalHours : (ts.total_hours || 0);
+                                                            
+                                                            return (
+                                                                <div key={i} style={{ 
+                                                                    padding: 12, 
+                                                                    borderBottom: '1px solid #f5f5f5', 
+                                                                    backgroundColor: '#f8f9fa', 
+                                                                    borderRadius: 8, 
+                                                                    marginBottom: 8,
+                                                                    border: '1px solid #e5e7eb',
+                                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                                                }}>
+                                                                    {/* Employee Name Header */}
+                                                                    <div style={{ 
+                                                                        fontSize: 14, 
+                                                                        fontWeight: 'bold', 
+                                                                        marginBottom: 8, 
+                                                                        color: '#1f2937',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 6,
+                                                                        paddingBottom: 6,
+                                                                        borderBottom: '1px solid #e5e7eb'
+                                                                    }}>
+                                                                        👤 {employeeName}
+                                                                    </div>
+
+                                                                    {/* Hours and Status Row */}
+                                                                    <div style={{ 
+                                                                        display: 'flex', 
+
+                                                                        justifyContent: 'space-between', 
+                                                                        alignItems: 'center',
+                                                                        marginBottom: 10,
+                                                                        flexWrap: 'wrap',
+                                                                        gap: 8
+                                                                    }}>
+                                                                          <div style={{ fontSize: 12 }}>
+                                                                                    <span style={{
+                                                                                        backgroundColor: ts.status === 'approved' ? '#dcfce7' : ts.status === 'rejected' ? '#fee2e2' : '#f3f4f6',
+                                                                                        color: ts.status === 'approved' ? '#166534' : ts.status === 'rejected' ? '#dc2626' : '#374151',
+                                                                                        padding: '4px 10px',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '11px',
+                                                                                        fontWeight: '600',
+                                                                                        textTransform: 'capitalize'
+                                                                                    }}>
+                                                                                        {ts.status || 'Pending'}
+                                                                                    </span>
+                                                                                </div>
+                                                                        <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                                                            <span style={{ fontWeight: '600', color: '#059669' }}>
+                                                                                {displayHours > 0 ? `${displayHours}h` : 'No hours recorded'}
+                                                                            </span>
+                                                                            {/* {totalHours > 0 && totalHours !== (ts.total_hours || 0) && (
+                                                                                <span style={{ fontSize: 10, color: '#6b7280', fontStyle: 'italic' }}>
+                                                                                    {' '}(calculated from tasks)
+                                                                                </span>
+                                                                            )} */}
+                                                                        </div>
+                                                                       
+                                                                    </div>
+
+                                                                    {/* Tasks Section */}
+                                                                    {parsedTasks && parsedTasks.length > 0 ? (
+                                                                        <div style={{ fontSize: 12 }}>
+                                                                            <div style={{ 
+                                                                                fontWeight: 'bold', 
+                                                                                marginBottom: 8, 
+                                                                                color: '#374151',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: 4
+                                                                            }}>
+                                                                                📋 Tasks Completed ({parsedTasks.length})
+                                                                            </div>
+                                                                            
+                                                                            {/* Task List */}
+                                                                            <div style={{ 
+                                                                                backgroundColor: 'white', 
+                                                                                padding: 10, 
+                                                                                borderRadius: 6, 
+                                                                                border: '1px solid #d1d5db',
+                                                                                maxHeight: 120,
+                                                                                overflow: 'auto'
+                                                                            }}>
+
+                                                                                
+                                                                                {parsedTasks.map((task, taskIndex) => (
+                                                                                    <div key={taskIndex} style={{
+                                                                                        display: 'flex',
+                                                                                        justifyContent: 'space-between',
+                                                                                        alignItems: 'flex-start',
+                                                                                        padding: '6px 0',
+                                                                                        borderBottom: taskIndex < parsedTasks.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                                                                        gap: 8
+                                                                                    }}>
+                                                                                        <div style={{ 
+                                                                                            flex: 1,
+                                                                                            fontSize: 11,
+                                                                                            lineHeight: '1.4',
+                                                                                            color: '#374151'
+                                                                                        }}>
+                                                                                            • {task.taskTitle || task.task_title || task.title || 'Untitled Task'}
+                                                                                        </div>
+                                                                                        <div style={{
+                                                                                            fontSize: 10,
+                                                                                            fontWeight: '600',
+                                                                                            color: '#059669',
+                                                                                            backgroundColor: '#f0fdf4',
+                                                                                            padding: '2px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            whiteSpace: 'nowrap'
+                                                                                        }}>
+                                                                                            {task.timeSpent || task.time_spent || 0}h
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : ts.tasks ? (
+                                                                        /* Fallback for malformed task data */
+                                                                        <div style={{ fontSize: 12 }}>
+                                                                            <div style={{ fontWeight: 'bold', marginBottom: 6, color: '#374151' }}>📋 Tasks (Raw Data):</div>
+                                                                            <div style={{ 
+                                                                                backgroundColor: 'white', 
+                                                                                padding: 8, 
+                                                                                borderRadius: 4, 
+                                                                                border: '1px solid #d1d5db',
+                                                                                whiteSpace: 'pre-wrap',
+                                                                                fontSize: 10,
+                                                                                maxHeight: 60,
+                                                                                overflow: 'auto',
+                                                                                lineHeight: '1.3',
+                                                                                color: '#6b7280',
+                                                                                fontStyle: 'italic'
+                                                                            }}>
+                                                                                {typeof ts.tasks === 'string' ? ts.tasks : JSON.stringify(ts.tasks, null, 2)}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        /* No tasks data */
+                                                                        <div style={{ 
+                                                                            fontSize: 11, 
+                                                                            color: '#6b7280', 
+                                                                            fontStyle: 'italic',
+                                                                            textAlign: 'center',
+                                                                            padding: 8
+                                                                        }}>
+                                                                            📝 No task details available
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    /* No timesheet data and no leave */
+                                                    <div style={{ padding: 16, color: 'var(--muted-foreground)', textAlign: 'center', fontStyle: 'italic' }}>
+                                                        {details.status === 'weekend' ? '🏖️ Weekend - No work scheduled' : 
+                                                         '� No timesheet records for this day'}
+                                                    </div>
+                                                )
                                             )}
                                         </div>
                                     </div>
                                 );
                             })()}
 
-                        </TabsContent>
-
-                        <TabsContent value="table" style={{ marginTop: '24px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                <div>
-                                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '4px' }}>Attendance Records</h3>
-                                    <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Detailed attendance log with check-in/out times</p>
-                                </div>
-
-                                <div style={{ border: '1px solid var(--border)', borderRadius: '8px' }}>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Date</TableHead>
-                                                <TableHead>Day</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Employees</TableHead>
-                                                <TableHead>Check In</TableHead>
-                                                <TableHead>Check Out</TableHead>
-                                                <TableHead>Total Hours</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {tableData.length > 0 ? tableData.map((record, index) => (
-                                                <TableRow key={index}>
-                                                    <TableCell style={{ fontWeight: '500' }}>{record.date}</TableCell>
-                                                    <TableCell style={{ color: 'var(--muted-foreground)' }}>{record.day}</TableCell>
-                                                    <TableCell>
-                                                        <Badge variant={getStatusColor(record.status)}>
-                                                            {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell style={{ color: 'var(--muted-foreground)', fontSize: '12px' }}>
-                                                        {record.employees?.length > 0 ? (
-                                                            <div style={{ maxWidth: '200px' }}>
-                                                                {record.employees.slice(0, 2).join(', ')}
-                                                                {record.employees.length > 2 && ` +${record.employees.length - 2} more`}
-                                                            </div>
-                                                        ) : '-'}
-                                                    </TableCell>
-                                                    <TableCell style={{ color: 'var(--muted-foreground)' }}>{record.checkIn}</TableCell>
-                                                    <TableCell style={{ color: 'var(--muted-foreground)' }}>{record.checkOut}</TableCell>
-                                                    <TableCell style={{ fontWeight: '500' }}>{record.hours}</TableCell>
-                                                </TableRow>
-                                            )) : (
-                                                <TableRow>
-                                                    <TableCell colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--muted-foreground)' }}>
-                                                        No attendance data found for {selectedMonth} {selectedYear}
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </div>
                         </TabsContent>
                     </Tabs>
                 </CardContent>
