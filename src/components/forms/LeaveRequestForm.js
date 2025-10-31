@@ -209,8 +209,8 @@ const LeaveRequestForm = ({ onClose }) => {
     // { type: 'annual', label: 'Annual Leave', remaining: 0 }
   ];
 
-  console.log('🏖️ Leave balance in form:', leaveBalance);
-  console.log('🏖️ Leave types:', leaveTypes);
+  //console.log('🏖️ Leave balance in form:', leaveBalance);
+  //console.log('🏖️ Leave types:', leaveTypes);
 
   // Check for active leave requests on component mount and when date changes
   React.useEffect(() => {
@@ -236,7 +236,7 @@ const LeaveRequestForm = ({ onClose }) => {
               formData.startDate,
               formData.endDate
             );
-            console.log('🔍 Overlap check result for dates:', formData.startDate, 'to', formData.endDate, overlapResult);
+            //console.log('🔍 Overlap check result for dates:', formData.startDate, 'to', formData.endDate, overlapResult);
           } catch (overlapError) {
             console.warn('⚠️ Could not check for overlapping leaves:', overlapError);
           }
@@ -253,12 +253,12 @@ const LeaveRequestForm = ({ onClose }) => {
           checked: true
         });
         
-        console.log('🔍 Combined leave check result:', {
-          activeToday: activeResult.hasActiveLeave,
-          overlapsRequested: overlapResult.hasOverlap,
-          finalConflict: hasConflict,
-          conflictingLeave
-        });
+        // console.log('🔍 Combined leave check result:', {
+        //   activeToday: activeResult.hasActiveLeave,
+        //   overlapsRequested: overlapResult.hasOverlap,
+        //   finalConflict: hasConflict,
+        //   conflictingLeave
+        // });
       } catch (error) {
         console.error('❌ Error checking active leave:', error);
         setActiveLeaveCheck({
@@ -314,11 +314,11 @@ const LeaveRequestForm = ({ onClose }) => {
         return;
       }
       
-      console.log('📎 File selected:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
+      // console.log('📎 File selected:', {
+      //   name: file.name,
+      //   size: file.size,
+      //   type: file.type
+      // });
     }
     
     setDocumentFile(file);
@@ -398,7 +398,7 @@ const LeaveRequestForm = ({ onClose }) => {
       };
 
       await requestLeave(leaveRequest);
-      console.log('Leave request submitted successfully');
+      //console.log('Leave request submitted successfully');
       onClose();
     } catch (error) {
       console.error('Error submitting leave request:', error);

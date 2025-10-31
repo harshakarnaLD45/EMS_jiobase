@@ -41,7 +41,7 @@ const Timesheet = () => {
             setError(null);
 
             if (!user) {
-                console.log('⚠️ No user found, cannot load timesheets');
+                // console.log('⚠️ No user found, cannot load timesheets');
                 return;
             }
 
@@ -49,20 +49,20 @@ const Timesheet = () => {
 
             // Check if admin - load all timesheets, if employee - load only their timesheets
             if (isAdmin()) {
-                console.log('👑 Admin view: Loading ALL employee timesheets');
+                // console.log('👑 Admin view: Loading ALL employee timesheets');
                 timesheetData = await timesheetApi.getAllTimesheets();
-                console.log('✅ All timesheets loaded for admin:', timesheetData.length);
+                // console.log('✅ All timesheets loaded for admin:', timesheetData.length);
             } else {
-                console.log('👤 Employee view: Loading individual timesheets');
+                // console.log('👤 Employee view: Loading individual timesheets');
                 
                 // Get employee data first
                 let employeeData = null;
                 try {
                     employeeData = await employeeApi.getEmployeeByUser(user);
                     setEmployee(employeeData);
-                    console.log('✅ Employee data loaded:', employeeData);
+                    // console.log('✅ Employee data loaded:', employeeData);
                 } catch (empError) {
-                    console.log('⚠️ Could not load employee data:', empError.message);
+                    // console.log('⚠️ Could not load employee data:', empError.message);
                     // Continue with user ID if employee lookup fails
                 }
 
@@ -73,7 +73,7 @@ const Timesheet = () => {
                     throw new Error('Could not determine employee ID for timesheet lookup');
                 }
 
-                console.log('🔍 Loading timesheets for employee ID:', employeeId);
+                // console.log('🔍 Loading timesheets for employee ID:', employeeId);
 
                 // Load timesheets using the API
                 timesheetData = await timesheetApi.getTimesheetsByEmployeeId(employeeId);
@@ -100,7 +100,7 @@ const Timesheet = () => {
                         }));
                     }
                 } catch (error) {
-                    console.log('⚠️ Error parsing tasks for timesheet:', timesheet.id, error.message);
+                    // console.log('⚠️ Error parsing tasks for timesheet:', timesheet.id, error.message);
                     parsedTasks = [];
                 }
 
@@ -126,8 +126,8 @@ const Timesheet = () => {
             setTimesheets(transformedTimesheets);
             calculateStats(transformedTimesheets);
 
-            console.log('✅ Timesheets loaded successfully:', transformedTimesheets.length);
-            console.log('📋 Sample timesheet data:', transformedTimesheets[0]);
+            // console.log('✅ Timesheets loaded successfully:', transformedTimesheets.length);
+            // console.log('📋 Sample timesheet data:', transformedTimesheets[0]);
 
         } catch (error) {
             console.error('❌ Error loading timesheets:', error);

@@ -64,12 +64,12 @@ const Leave = () => {
       let requests = [];
       
       if (isAdmin) {
-        console.log('� Admin view: Loading ALL employee leave requests');
+        //console.log('� Admin view: Loading ALL employee leave requests');
         requests = await leaveApi.getAllLeaveRequestsWithEmployees();
-        console.log('✅ All leave requests loaded for admin:', requests.length);
+        //console.log('✅ All leave requests loaded for admin:', requests.length);
       } else {
         const employeeId = user.employee_id || user.id;
-        console.log('� Employee view: Loading leave requests for employee ID:', employeeId);
+        //console.log('� Employee view: Loading leave requests for employee ID:', employeeId);
         requests = await leaveApi.getLeaveRequests(employeeId);
       }
       
@@ -82,7 +82,7 @@ const Leave = () => {
                       null
       }));
       
-      console.log('✅ Leave requests loaded:', transformedRequests);
+      //console.log('✅ Leave requests loaded:', transformedRequests);
       setLeaveRequests(transformedRequests || []);
     } catch (error) {
       console.error('❌ Error loading leave requests:', error);
@@ -311,7 +311,7 @@ const Leave = () => {
   });
 
   const handleFilterChange = (field, value) => {
-    console.log('🔄 Filter change:', field, '=', value);
+    //console.log('🔄 Filter change:', field, '=', value);
     setFilters(prev => ({
       ...prev,
       [field]: value

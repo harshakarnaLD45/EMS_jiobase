@@ -42,7 +42,7 @@ const Login = () => {
 
         try {
             // Try admin authentication first, then employee authentication
-            console.log('🔐 Attempting authentication (admin priority)...');
+            //console.log('🔐 Attempting authentication (admin priority)...');
             const user = await login({
                 email: credentials.email,
                 password: credentials.password
@@ -51,9 +51,9 @@ const Login = () => {
             
             // Show success message based on user type
             if (user.loginType === 'admin' || user.isAdmin || user.role === 'admin' || user.role === 'super_admin') {
-                console.log('✅ Admin login successful - will redirect to admin dashboard');
+                ////console.log('✅ Admin login successful - will redirect to admin dashboard');
             } else {
-                console.log('✅ Employee login successful - will redirect to employee dashboard');
+                ////console.log('✅ Employee login successful - will redirect to employee dashboard');
             }
             
             // Navigate to root and let DefaultRedirect component handle the routing

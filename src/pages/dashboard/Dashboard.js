@@ -30,7 +30,7 @@ const Dashboard = () => {
 
       if (isAdmin()) {
         // Load admin dashboard data
-        console.log('📊 Loading admin dashboard data...');
+        //console.log('📊 Loading admin dashboard data...');
         const dashboardStats = await adminApi.getDashboardStats();
 
         setStats({
@@ -58,7 +58,7 @@ const Dashboard = () => {
 
       } else {
         // Load employee dashboard data
-        console.log('👤 Loading employee dashboard data...');
+        //console.log('👤 Loading employee dashboard data...');
 
         // Get employee timesheets using employee_id (since we only have employee auth now)
         const timesheets = await timesheetApi.getTimesheetsByEmployeeId(user.employee_id || user.id);
@@ -81,7 +81,7 @@ const Dashboard = () => {
             ? await leaveApi.getLeaveBalanceByEmployeeId(user.employee_id)
             : await leaveApi.getLeaveBalance(user.id);
         } catch (leaveError) {
-          console.log('⚠️ No leave balance found, using defaults');
+          //console.log('⚠️ No leave balance found, using defaults');
         }
 
         // Calculate employee stats - ONLY COUNT APPROVED TIMESHEETS
@@ -124,7 +124,7 @@ const Dashboard = () => {
         });
       }
 
-      console.log('✅ Dashboard data loaded successfully');
+      //console.log('✅ Dashboard data loaded successfully');
     } catch (error) {
       console.error('❌ Error loading dashboard data:', error);
       setError(`Failed to load dashboard data: ${error.message}`);

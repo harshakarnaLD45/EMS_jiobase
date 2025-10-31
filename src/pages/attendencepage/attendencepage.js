@@ -80,13 +80,13 @@ export default function Attendance() {
             
             // Debug logging for multi-day leave issue
             if (dateString === '2025-10-17' || dateString === '2025-10-18') {
-                console.log(`🔍 Leave check for ${dateString}:`, {
-                    leaveStartDate,
-                    leaveEndDate,
-                    dateString,
-                    isInRange,
-                    leaveType: leave.leave_type
-                });
+                // console.log(`🔍 Leave check for ${dateString}:`, {
+                //     leaveStartDate,
+                //     leaveEndDate,
+                //     dateString,
+                //     isInRange,
+                //     leaveType: leave.leave_type
+                // });
             }
             
             return isInRange;
@@ -206,7 +206,7 @@ export default function Attendance() {
 
             // PRIORITY 1: If user already has employee_id from login, use it directly
             if (user.employee_id) {
-                console.log('✅ PRIORITY 1: User has employee_id from login:', user.employee_id);
+                //console.log('✅ PRIORITY 1: User has employee_id from login:', user.employee_id);
 
                 // Find the full employee record for additional data
                 const employeeRecord = employees.find(emp =>
@@ -227,8 +227,8 @@ export default function Attendance() {
                 };
 
                 setCurrentEmployee(employeeData);
-                console.log('✅ Set current employee from user.employee_id:', employeeData);
-                console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', employeeData.employee_id);
+                //console.log('✅ Set current employee from user.employee_id:', employeeData);
+                //console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', employeeData.employee_id);
                 return;
             }
 
@@ -241,7 +241,7 @@ export default function Attendance() {
                     emp.email?.toLowerCase() === user.email?.toLowerCase()
                 );
                 if (employee) {
-                    console.log('👤 PRIORITY 2: Employee found via case-insensitive email match');
+                    //console.log('👤 PRIORITY 2: Employee found via case-insensitive email match');
                 }
             }
 
@@ -253,7 +253,7 @@ export default function Attendance() {
                     emp.employee_id === user.id
                 );
                 if (employee) {
-                    console.log('👤 PRIORITY 3: Employee found via ID matching');
+                    //console.log('👤 PRIORITY 3: Employee found via ID matching');
                 }
             }
 
@@ -265,14 +265,14 @@ export default function Attendance() {
                     return userNameParts.some(part => empName.includes(part) && part.length > 2);
                 });
                 if (employee) {
-                    console.log('👤 PRIORITY 4: Employee found via name matching');
+                    //console.log('👤 PRIORITY 4: Employee found via name matching');
                 }
             }
 
             if (employee) {
                 setCurrentEmployee(employee);
-                console.log('✅ Current employee found in employees list:', employee);
-                console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', employee.employee_id || employee.id);
+                //console.log('✅ Current employee found in employees list:', employee);
+                //console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', employee.employee_id || employee.id);
             } else if (isEmployee()) {
                 // If employee role but not found in list, create minimal employee data
                 const minimalEmployee = {
@@ -285,10 +285,10 @@ export default function Attendance() {
                     role: 'employee'
                 };
                 setCurrentEmployee(minimalEmployee);
-                console.log('⚠️ Created minimal employee data (not found in employees list):', minimalEmployee);
-                console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', minimalEmployee.employee_id);
+                //console.log('⚠️ Created minimal employee data (not found in employees list):', minimalEmployee);
+                //console.log('🆔 *** EMPLOYEE_ID TO USE FOR FILTERING: ***', minimalEmployee.employee_id);
             } else {
-                console.log('❌ User is not an employee or no matching employee found');
+                //console.log('❌ User is not an employee or no matching employee found');
                 setCurrentEmployee(null);
             }
         } catch (error) {
@@ -303,15 +303,15 @@ export default function Attendance() {
 
             if (isAdmin()) {
                 // Admin view - fetch all timesheets and leave requests
-                console.log('👑 Admin view: Loading all attendance data');
+                //console.log('👑 Admin view: Loading all attendance data');
                 const [allTimesheets, allLeaveRequests] = await Promise.all([
                     timesheetApi.getAllTimesheets(),
                     leaveApi.getAllLeaveRequestsWithEmployees()
                 ]);
-                console.log('📊 Loaded for admin:', {
-                    timesheets: allTimesheets.length,
-                    leaveRequests: allLeaveRequests.length
-                });
+                // console.log('📊 Loaded for admin:', {
+                //     timesheets: allTimesheets.length,
+                //     leaveRequests: allLeaveRequests.length
+                // });
                 
                 // Apply employee filter if selected
                 let filteredTimesheets = allTimesheets;
@@ -329,23 +329,23 @@ export default function Attendance() {
                         return employeeName === filters.employee;
                     });
                     
-                    console.log(`📊 Filtered for ${filters.employee}:`, {
-                        timesheets: filteredTimesheets.length,
-                        leaveRequests: filteredLeaveRequests.length
-                    });
+                    // console.log(`📊 Filtered for ${filters.employee}:`, {
+                    //     timesheets: filteredTimesheets.length,
+                    //     leaveRequests: filteredLeaveRequests.length
+                    // });
                 }
                 
-                console.log('📋 Sample timesheets:', filteredTimesheets.slice(0, 3));
-                console.log('📅 Sample leave requests:', filteredLeaveRequests.slice(0, 3));
+                //console.log('📋 Sample timesheets:', filteredTimesheets.slice(0, 3));
+                //console.log('📅 Sample leave requests:', filteredLeaveRequests.slice(0, 3));
                 
                 setTimesheets(filteredTimesheets);
                 setLeaveRequests(filteredLeaveRequests);
             } else if (isEmployee() && currentEmployee) {
                 // Employee view - fetch personal timesheets and leave requests
-                console.log('👤 Employee view: Loading personal attendance data for', currentEmployee.email);
+                //console.log('👤 Employee view: Loading personal attendance data for', currentEmployee.email);
                 
                 const targetEmployeeId = currentEmployee.employee_id || currentEmployee.id;
-                console.log('🆔 Loading data for employee ID:', targetEmployeeId);
+                //console.log('🆔 Loading data for employee ID:', targetEmployeeId);
                 
                 try {
                     // Fetch both timesheets and leave requests for the employee
@@ -354,10 +354,10 @@ export default function Attendance() {
                         leaveApi.getLeaveRequests(targetEmployeeId)
                     ]);
                     
-                    console.log('📊 Personal data loaded:', {
-                        timesheets: employeeTimesheets.length,
-                        leaveRequests: employeeLeaveRequests.length
-                    });
+                    // console.log('📊 Personal data loaded:', {
+                    //     timesheets: employeeTimesheets.length,
+                    //     leaveRequests: employeeLeaveRequests.length
+                    // });
                     
                     setTimesheets(employeeTimesheets);
                     setLeaveRequests(employeeLeaveRequests);
@@ -365,7 +365,7 @@ export default function Attendance() {
                 } catch (personalDataError) {
                     console.error('❌ Error loading personal data:', personalDataError);
                     // Fallback: try with alternative ID or load all and filter
-                    console.log('🔄 Trying fallback approach...');
+                    //console.log('🔄 Trying fallback approach...');
                     
                     const [allTimesheets, allLeaveRequests] = await Promise.all([
                         timesheetApi.getAllTimesheets(),
@@ -385,22 +385,22 @@ export default function Attendance() {
                                lr.employees?.email === currentEmployee.email;
                     });
                     
-                    console.log('📊 Fallback filtered data:', {
-                        timesheets: employeeTimesheets.length,
-                        leaveRequests: employeeLeaveRequests.length
-                    });
+                    // console.log('📊 Fallback filtered data:', {
+                    //     timesheets: employeeTimesheets.length,
+                    //     leaveRequests: employeeLeaveRequests.length
+                    // });
                     
                     setTimesheets(employeeTimesheets);
                     setLeaveRequests(employeeLeaveRequests);
                 }
             } else if (isEmployee() && !currentEmployee) {
                 // Employee but no current employee data yet - wait
-                console.log('⏳ Employee detected but no employee data yet, waiting...');
+                //console.log('⏳ Employee detected but no employee data yet, waiting...');
                 setTimesheets([]);
                 setLeaveRequests([]);
             } else {
                 // Default fallback - should not happen in normal cases
-                console.log('❓ Unknown user type, no data loaded');
+                //console.log('❓ Unknown user type, no data loaded');
                 setTimesheets([]);
                 setLeaveRequests([]);
             }

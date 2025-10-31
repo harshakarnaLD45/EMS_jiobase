@@ -25,14 +25,14 @@ const AdminDashboard = () => {
             setLoading(true);
             setError(null);
 
-            console.log('🚀 Starting to load dashboard data...');
+            //console.log('🚀 Starting to load dashboard data...');
 
             // Try optimized aggregated stats first (reads directly from employees table)
             try {
-                console.log('📈 Attempting to fetch aggregated dashboard stats...');
+                //console.log('📈 Attempting to fetch aggregated dashboard stats...');
                 const quickStats = await adminApi.getDashboardStats();
                 if (quickStats && typeof quickStats.totalEmployees !== 'undefined') {
-                    console.log('✅ Aggregated dashboard stats received:', quickStats);
+                    //console.log('✅ Aggregated dashboard stats received:', quickStats);
                     setDashboardStats({
                         totalEmployees: {
                             count: quickStats.totalEmployees || 0,
@@ -63,7 +63,7 @@ const AdminDashboard = () => {
             // Debug database connection first
             try {
                 const debugResult = await adminApi.debugDatabase();
-                console.log('🔍 Database debug result:', debugResult);
+                //console.log('🔍 Database debug result:', debugResult);
             } catch (debugError) {
                 console.error('⚠️ Debug failed:', debugError);
             }
@@ -72,10 +72,10 @@ const AdminDashboard = () => {
             let allStaff, activity, leaveRequests, timesheets;
 
             try {
-                console.log('👥 Fetching employees only...');
+                //console.log('👥 Fetching employees only...');
                 allStaff = await adminApi.getAllEmployeesAndAdmins();
-                console.log('✅ Employee data loaded:', allStaff?.length || 0);
-                console.log('📋 Sample employee data:', allStaff?.slice(0, 2));
+                //console.log('✅ Employee data loaded:', allStaff?.length || 0);
+                //console.log('📋 Sample employee data:', allStaff?.slice(0, 2));
 
                 if (!allStaff || allStaff.length === 0) {
                     console.warn('⚠️ No employee data returned - checking employees table...');
@@ -83,7 +83,7 @@ const AdminDashboard = () => {
                     // Try fetching employees directly
                     const { employeeApi } = await import('../../utils/supabase');
                     const employees = await employeeApi.getEmployees();
-                    console.log('📊 Direct employees query:', employees?.length || 0);
+                    //console.log('📊 Direct employees query:', employees?.length || 0);
 
                     allStaff = employees || [];
                 }
@@ -94,7 +94,7 @@ const AdminDashboard = () => {
             }
 
             try {
-                console.log('📋 Fetching leave requests...');
+                //console.log('📋 Fetching leave requests...');
                 const { supabase } = await import('../../utils/supabase');
                 const { data: leaves, error: leaveError } = await supabase
                     .from('leave_requests')
@@ -106,8 +106,8 @@ const AdminDashboard = () => {
                 }
 
                 leaveRequests = leaves || [];
-                console.log('✅ Leave requests loaded:', leaveRequests.length);
-                console.log('📋 Sample leave request:', leaveRequests[0]);
+                //console.log('✅ Leave requests loaded:', leaveRequests.length);
+                //console.log('📋 Sample leave request:', leaveRequests[0]);
             } catch (leaveError) {
                 console.error('❌ Error loading leave requests:', leaveError);
                 setError(`Leave requests failed: ${leaveError.message}`);
@@ -115,7 +115,7 @@ const AdminDashboard = () => {
             }
 
             try {
-                console.log('⏰ Fetching timesheets...');
+                //console.log('⏰ Fetching timesheets...');
                 const { supabase } = await import('../../utils/supabase');
                 const { data: timesheetData, error: timesheetError } = await supabase
                     .from('timesheets')
@@ -127,8 +127,8 @@ const AdminDashboard = () => {
                 }
 
                 timesheets = timesheetData || [];
-                console.log('✅ Timesheets loaded:', timesheets.length);
-                console.log('📋 Sample timesheet:', timesheets[0]);
+                //console.log('✅ Timesheets loaded:', timesheets.length);
+                //console.log('📋 Sample timesheet:', timesheets[0]);
             } catch (timesheetError) {
                 console.error('❌ Error loading timesheets:', timesheetError);
                 setError(`Timesheets failed: ${timesheetError.message}`);
@@ -176,7 +176,7 @@ const AdminDashboard = () => {
                 !ts.status || ts.status === 'pending' || ts.status === 'submitted' || ts.status === null
             );
 
-            // console.log('🔍 Timesheet status debugging:');
+            // //console.log('🔍 Timesheet status debugging:');
             // console.log('   - Total timesheets fetched:', timesheets.length);
             // console.log('   - All timesheets:', timesheets.map(ts => ({
             //     id: ts.id,
@@ -210,7 +210,7 @@ const AdminDashboard = () => {
                 pendingTimesheets: pendingTimesheets?.length || 0
             };
 
-            console.log('📊 Final calculated stats:', stats);
+            //console.log('📊 Final calculated stats:', stats);
 
             if (stats.totalEmployees === 0) {
                 console.error('🚨 No employee data found! This indicates a database connection issue.');
@@ -254,12 +254,12 @@ const AdminDashboard = () => {
 
                 // Log successful matches for verification
                 if (staffMember) {
-                    console.log('✅ Matched leave request to employee:', {
-                        request_id: req.id,
-                        employee_name: staffMember.name,
-                        employee_id: staffMember.employee_id,
-                        employee_record_id: staffMember.id
-                    });
+                    // console.log('✅ Matched leave request to employee:', {
+                    //     request_id: req.id,
+                    //     employee_name: staffMember.name,
+                    //     employee_id: staffMember.employee_id,
+                    //     employee_record_id: staffMember.id
+                    // });
                 }
 
                 return {
@@ -272,7 +272,7 @@ const AdminDashboard = () => {
                 };
             });
 
-            console.log('📋 Processed activity with staff info:', activity.length);
+            //console.log('📋 Processed activity with staff info:', activity.length);
 
             // Process pending timesheets with employee info
             const enrichedTimesheets = pendingTimesheets.map(timesheet => {
@@ -315,14 +315,14 @@ const AdminDashboard = () => {
                 };
             });
 
-            console.log('⏰ Processed timesheets with staff info:', enrichedTimesheets.length);
-            console.log('📋 Enriched timesheets data:', enrichedTimesheets);
+            //console.log('⏰ Processed timesheets with staff info:', enrichedTimesheets.length);
+            //console.log('📋 Enriched timesheets data:', enrichedTimesheets);
             setPendingTimesheets(enrichedTimesheets);
 
             // Final verification - compare stats vs actual state
-            console.log('🏁 Final verification:');
-            console.log('   - Stats pending timesheets:', stats.pendingTimesheets);
-            console.log('   - Actual pending timesheets being set:', enrichedTimesheets.length);
+            //console.log('🏁 Final verification:');
+            //console.log('   - Stats pending timesheets:', stats.pendingTimesheets);
+            //console.log('   - Actual pending timesheets being set:', enrichedTimesheets.length);
 
             setDashboardStats({
                 totalEmployees: {
@@ -349,12 +349,12 @@ const AdminDashboard = () => {
                 }
             });
 
-            console.log('🎯 Setting recent activity:', activity);
+            //console.log('🎯 Setting recent activity:', activity);
             setRecentActivity(activity || []);
 
             // Check and update employee statuses after leave ends
             try {
-                console.log('🔄 Checking employee statuses after leave periods...');
+                //console.log('🔄 Checking employee statuses after leave periods...');
                 const today = new Date().toISOString().slice(0, 10);
                 
                 // Get all employees who might need status updates
@@ -362,7 +362,7 @@ const AdminDashboard = () => {
                     emp.status && (emp.status.toLowerCase().includes('leave') || emp.status.toLowerCase() === 'on-leave')
                 );
                 
-                console.log('👥 Found employees with leave status to check:', employeesToCheck.length);
+                //console.log('👥 Found employees with leave status to check:', employeesToCheck.length);
                 
                 for (const employee of employeesToCheck) {
                     try {
@@ -373,16 +373,16 @@ const AdminDashboard = () => {
                 }
                 
                 if (employeesToCheck.length > 0) {
-                    console.log('✅ Completed employee status checks');
+                    //console.log('✅ Completed employee status checks');
                 }
             } catch (statusCheckError) {
                 console.warn('⚠️ Error during employee status check:', statusCheckError.message);
             }
 
             if (activity && activity.length > 0) {
-                console.log('✅ Successfully loaded real data from Supabase');
+                //console.log('✅ Successfully loaded real data from Supabase');
             } else {
-                console.log('⚠️ No activity data found - this might be expected if no leave requests exist');
+                ////console.log('⚠️ No activity data found - this might be expected if no leave requests exist');
                 setError('No leave requests found in database.');
             }
 
@@ -619,25 +619,25 @@ const AdminDashboard = () => {
     // Debug function - available in browser console as window.debugEmployeeData()
     React.useEffect(() => {
         window.debugEmployeeData = async () => {
-            console.log('🔍 Starting employee data debug...');
+            //console.log('🔍 Starting employee data debug...');
 
             try {
                 // Test direct queries
-                console.log('📊 Testing direct database queries...');
+                //console.log('📊 Testing direct database queries...');
                 await adminApi.debugDatabase();
 
                 // Test employee name function
-                console.log('👤 Testing employee name function...');
+                //console.log('👤 Testing employee name function...');
                 if (recentActivity && recentActivity.length > 0) {
                     const firstRequest = recentActivity[0];
                     if (firstRequest.rawData?.user_id) {
                         const employeeName = await adminApi.getEmployeeName(firstRequest.rawData.user_id);
-                        console.log('✅ Employee name result:', employeeName);
+                        //console.log('✅ Employee name result:', employeeName);
                     }
                 }
 
-                console.log('📋 Current recentActivity state:', recentActivity);
-                console.log('📋 Current pendingRequests:', pendingRequests);
+                //console.log('📋 Current recentActivity state:', recentActivity);
+                //console.log('📋 Current pendingRequests:', pendingRequests);
 
             } catch (error) {
                 console.error('❌ Debug function error:', error);

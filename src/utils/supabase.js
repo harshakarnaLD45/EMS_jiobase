@@ -68,7 +68,7 @@ export const authApi = {
 
     // Admin login using email and password from admins table
     async signInAdmin(email, password) {
-        console.log('🔐 Admin login attempt for:', email);
+        // console.log('🔐 Admin login attempt for:', email);
         
         const { data, error } = await supabase
             .from('admins')
@@ -78,11 +78,11 @@ export const authApi = {
             .single();
         
         if (error || !data) {
-            console.log('❌ Admin login failed:', error?.message);
+            console.error('❌ Admin login failed:', error?.message);
             throw new Error('Invalid admin email or password');
         }
         
-        console.log('✅ Admin login successful:', data.name);
+        // console.log('✅ Admin login successful:', data.name);
         
         // Return admin data in user format
         return {
@@ -99,7 +99,7 @@ export const authApi = {
 // Timesheet related functions
 export const timesheetApi = {
     async createTimesheet(timesheetData) {
-        console.log('📋 Creating timesheet with data:', timesheetData);
+        // console.log('📋 Creating timesheet with data:', timesheetData);
         
         // Ensure we have employee_id if not provided 
         if (!timesheetData.employee_id && timesheetData.user) {
@@ -108,9 +108,9 @@ export const timesheetApi = {
                 timesheetData.employee_id = employee.employee_id || employee.id;
                 // Also add employee name for better tracking
                 timesheetData.employee_name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
-                console.log('✅ Added employee_id to timesheet:', timesheetData.employee_id, 'Name:', timesheetData.employee_name);
+                // console.log('✅ Added employee_id to timesheet:', timesheetData.employee_id, 'Name:', timesheetData.employee_name);
             } catch (error) {
-                console.log('⚠️ Could not fetch employee_id for timesheet:', error.message);
+                console.error('⚠️ Could not fetch employee_id for timesheet:', error.message);
                 // Continue without employee_id but log the issue
             }
         }
@@ -136,7 +136,7 @@ export const timesheetApi = {
         
         if (error) throw error;
         
-        console.log('✅ Timesheet created successfully:', data[0]);
+        // console.log('✅ Timesheet created successfully:', data[0]);
         return data[0];
     },
 
@@ -152,7 +152,7 @@ export const timesheetApi = {
     },
 
     async getTimesheetsByEmployeeId(employeeId) {
-        console.log('🔍 Fetching timesheets for employee:', employeeId);
+        // console.log('🔍 Fetching timesheets for employee:', employeeId);
         
         const { data, error } = await supabase
             .from('timesheets')
@@ -174,7 +174,7 @@ export const timesheetApi = {
             throw error;
         }
 
-        console.log('✅ Fetched employee timesheets:', data.length);
+        // console.log('✅ Fetched employee timesheets:', data.length);
         
         // Transform data to include employee name for consistency
         const enrichedData = data.map(timesheet => ({
@@ -200,7 +200,7 @@ export const timesheetApi = {
 
     // Admin function: Get ALL employee timesheets with employee names
     async getAllTimesheets() {
-        console.log('🔍 Fetching ALL employee timesheets for admin view...');
+        // console.log('🔍 Fetching ALL employee timesheets for admin view...');
         
         const { data, error } = await supabase
             .from('timesheets')
@@ -221,7 +221,7 @@ export const timesheetApi = {
             throw error;
         }
 
-        console.log('✅ Fetched all timesheets:', data.length);
+        // console.log('✅ Fetched all timesheets:', data.length);
         
         // Transform data to include employee name
         const enrichedData = data.map(timesheet => ({
@@ -249,7 +249,7 @@ export const leaveApi = {
     },
 
     async getLeaveBalanceByEmployeeId(employeeId) {
-        console.log('🔍 Getting leave balance for employee ID:', employeeId);
+        // console.log('🔍 Getting leave balance for employee ID:', employeeId);
         
         // First try to get existing balance
         const { data, error } = await supabase
@@ -259,7 +259,7 @@ export const leaveApi = {
             .single();
 
         if (error) {
-            console.log('⚠️ No existing leave balance found, creating default:', error.message);
+            // console.log('⚠️ No existing leave balance found, creating default:', error.message);
             
             // If no balance found, create a default one
             try {
@@ -267,15 +267,14 @@ export const leaveApi = {
                     .from('leave_balances')
                     .insert({
                         employee_id: employeeId,
-                        sick_leave: 12,
-                        casual_leave: 15,
-                        annual_leave: 20
+                        sick_leave: 8,
+                        casual_leave: 8,
                     })
                     .select()
                     .single();
                 
                 if (createError) throw createError;
-                console.log('✅ Created default leave balance:', newBalance);
+                // console.log('✅ Created default leave balance:', newBalance);
                 return newBalance;
                 
             } catch (insertError) {
@@ -284,12 +283,12 @@ export const leaveApi = {
             }
         }
         
-        console.log('✅ Found existing leave balance:', data);
+        // console.log('✅ Found existing leave balance:', data);
         return data;
     },
 
     async createLeaveRequest(leaveData) {
-        console.log('🏖️ Creating leave request with data:', leaveData);
+        // console.log('🏖️ Creating leave request with data:', leaveData);
         
         // Ensure we have employee_id if not provided
         if (!leaveData.employee_id && leaveData.user) {
@@ -298,9 +297,9 @@ export const leaveApi = {
                 leaveData.employee_id = employee.employee_id || employee.id;
                 // Also add employee name for better tracking
                 leaveData.employee_name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
-                console.log('✅ Added employee_id to leave request:', leaveData.employee_id, 'Name:', leaveData.employee_name);
+                // console.log('✅ Added employee_id to leave request:', leaveData.employee_id, 'Name:', leaveData.employee_name);
             } catch (error) {
-                console.log('⚠️ Could not fetch employee_id for leave request:', error.message);
+                console.error('⚠️ Could not fetch employee_id for leave request:', error.message);
                 // Continue without employee_id but log the issue
             }
         }
@@ -334,7 +333,7 @@ export const leaveApi = {
 
         // Handle document upload if provided
         if (document) {
-          console.log('📎 Processing document upload for leave request');
+          // console.log('📎 Processing document upload for leave request');
           
           try {
             // Use the enhanced uploadLeaveDocument function
@@ -348,12 +347,12 @@ export const leaveApi = {
               leaveRecord.document_size = documentMetadata.fileSize;
               leaveRecord.uploaded_at = documentMetadata.uploadedAt;
               
-              console.log('✅ Document metadata added to leave record:', {
-                hasDocumentation: leaveRecord.has_documentation,
-                documentName: leaveRecord.document_name,
-                documentSize: leaveRecord.document_size,
-                documentType: leaveRecord.document_type
-              });
+              // console.log('✅ Document metadata added to leave record:', {
+              //   hasDocumentation: leaveRecord.has_documentation,
+              //   documentName: leaveRecord.document_name,
+              //   documentSize: leaveRecord.document_size,
+              //   documentType: leaveRecord.document_type
+              // });
             }
           } catch (uploadError) {
             console.error('❌ Error handling document upload:', uploadError);
@@ -378,7 +377,7 @@ export const leaveApi = {
             balance[`${leaveData.leave_type}_leave`] - requestedDays
         );
 
-        console.log('✅ Leave request created successfully:', data[0]);
+        // console.log('✅ Leave request created successfully:', data[0]);
         return data[0];
     },
 
@@ -409,10 +408,10 @@ export const leaveApi = {
 
     // Check if employee has any active approved leave requests for today's date
     async checkActiveLeaveRequest(employeeId, userId) {
-        console.log('🔍 Checking for active leave requests for employee:', employeeId || userId);
+        // console.log('🔍 Checking for active leave requests for employee:', employeeId || userId);
         
         const today = new Date().toISOString().slice(0, 10); // Get today's date in YYYY-MM-DD format
-        console.log('📅 Today\'s date:', today);
+        // console.log('📅 Today\'s date:', today);
         
         try {
             const { data, error } = await supabase
@@ -428,10 +427,10 @@ export const leaveApi = {
                 throw error;
             }
 
-            console.log('📋 Active leave requests found:', data?.length || 0);
-            if (data && data.length > 0) {
-                console.log('📝 Active leave details:', data[0]);
-            }
+            // console.log('📋 Active leave requests found:', data?.length || 0);
+            // if (data && data.length > 0) {
+            //     console.log('📝 Active leave details:', data[0]);
+            // }
             
             return {
                 hasActiveLeave: data && data.length > 0,
@@ -445,7 +444,7 @@ export const leaveApi = {
 
     // Check if employee has any approved leave requests that overlap a given date range
     async checkOverlappingApprovedLeave(employeeId, userId, startDate, endDate) {
-        console.log('🔍 Checking for overlapping approved leaves for:', employeeId || userId, { startDate, endDate });
+        // console.log('🔍 Checking for overlapping approved leaves for:', employeeId || userId, { startDate, endDate });
 
         try {
             // Fetch approved leaves for the employee then perform overlap check client-side
@@ -474,7 +473,7 @@ export const leaveApi = {
                 return !(le < sDate || ls > eDate);
             });
 
-            console.log('📋 Overlapping approved leaves found:', overlapping.length);
+            // console.log('📋 Overlapping approved leaves found:', overlapping.length);
             return { hasOverlap: overlapping.length > 0, overlappingLeaves: overlapping };
         } catch (err) {
             console.error('❌ Error in checkOverlappingApprovedLeave:', err);
@@ -484,7 +483,7 @@ export const leaveApi = {
 
     // Admin: Get ALL leave requests with employee info joined
     async getAllLeaveRequestsWithEmployees() {
-        console.log('🔍 Fetching ALL leave requests with employee data for admin view...');
+        // console.log('🔍 Fetching ALL leave requests with employee data for admin view...');
         try {
             // First try with explicit foreign key reference
             const { data, error } = await supabase
@@ -517,7 +516,7 @@ export const leaveApi = {
                 
                 // Get unique employee IDs
                 const employeeIds = [...new Set(requests.map(r => r.employee_id).filter(Boolean))];
-                console.log('🆔 Unique employee IDs to lookup:', employeeIds);
+                // console.log('🆔 Unique employee IDs to lookup:', employeeIds);
                 
                 // Fetch employees - use employee_id column instead of id
                 const { data: employees, error: empError } = await supabase
@@ -529,7 +528,7 @@ export const leaveApi = {
                     console.error('❌ Error fetching employees by employee_id:', empError);
                     
                     // Try alternative: maybe the table uses a different primary key
-                    console.log('🔄 Trying to fetch all employees and match manually...');
+                    // console.log('🔄 Trying to fetch all employees and match manually...');
                     const { data: allEmployees, error: allEmpError } = await supabase
                         .from('employees')
                         .select('*');
@@ -539,8 +538,8 @@ export const leaveApi = {
                         return requests;
                     }
                     
-                    console.log('👥 Fetched all employees:', allEmployees?.length || 0);
-                    console.log('📋 Sample employee record:', allEmployees?.[0]);
+                    // console.log('👥 Fetched all employees:', allEmployees?.length || 0);
+                    // console.log('📋 Sample employee record:', allEmployees?.[0]);
                     
                     // Create lookup map using employee_id
                     const empMap = {};
@@ -550,7 +549,7 @@ export const leaveApi = {
                         }
                     });
                     
-                    console.log('🗺️ Employee map keys:', Object.keys(empMap));
+                    // console.log('🗺️ Employee map keys:', Object.keys(empMap));
                     
                     // Merge data
                     const enriched = requests.map(req => ({
@@ -558,12 +557,12 @@ export const leaveApi = {
                         employees: empMap[req.employee_id] || null
                     }));
                     
-                    console.log('✅ Manually joined leave requests with employees:', enriched.length);
-                    console.log('📋 Sample enriched request:', enriched[0]);
+                    // console.log('✅ Manually joined leave requests with employees:', enriched.length);
+                    // console.log('📋 Sample enriched request:', enriched[0]);
                     return enriched;
                 }
                 
-                console.log('👥 Fetched employees:', employees?.length || 0);
+                // console.log('👥 Fetched employees:', employees?.length || 0);
                 
                 // Create lookup map using employee_id
                 const empMap = {};
@@ -579,11 +578,11 @@ export const leaveApi = {
                     employees: empMap[req.employee_id] || null
                 }));
                 
-                console.log('✅ Manually joined leave requests with employees:', enriched.length);
+                // console.log('✅ Manually joined leave requests with employees:', enriched.length);
                 return enriched;
             }
             
-            console.log('✅ Fetched leave requests with join (admin):', data?.length || 0);
+            // console.log('✅ Fetched leave requests with join (admin):', data?.length || 0);
             return data || [];
         } catch (err) {
             console.error('❌ Error fetching all leave requests with employees:', err);
@@ -617,13 +616,13 @@ export const leaveApi = {
             const fileName = `${employeeId}-${Date.now()}.${fileExt}`;
             const filePath = fileName; // Don't include folder in path, just the filename
 
-            console.log('📎 Uploading document:', {
-                fileName: file.name,
-                fileSize: file.size,
-                fileType: file.type,
-                employeeId,
-                filePath
-            });
+            // console.log('📎 Uploading document:', {
+            //     fileName: file.name,
+            //     fileSize: file.size,
+            //     fileType: file.type,
+            //     employeeId,
+            //     filePath
+            // });
 
             // Upload file to Supabase Storage
             const { data, error } = await supabase.storage
@@ -635,14 +634,14 @@ export const leaveApi = {
                 throw error;
             }
 
-            console.log('✅ Document uploaded successfully:', data);
+            // console.log('✅ Document uploaded successfully:', data);
 
             // Get public URL for the uploaded file
             const { data: { publicUrl } } = supabase.storage
                 .from('leave-documents')
                 .getPublicUrl(filePath);
 
-            console.log('🔗 Generated public URL:', publicUrl);
+            // console.log('🔗 Generated public URL:', publicUrl);
 
             // Return comprehensive document metadata
             return {
@@ -700,7 +699,7 @@ export const employeeApi = {
     },
     // Get employee ID by user name, email, or user ID
     async getEmployeeByUser(user) {
-        console.log('🔍 Looking up employee for user:', user);
+        // console.log('🔍 Looking up employee for user:', user);
         
         if (!user) {
             throw new Error('User data is required');
@@ -720,11 +719,11 @@ export const employeeApi = {
                     .single();
                 
                 if (!empError && data) {
-                    console.log('✅ Found employee by employee_id:', data);
+                    // console.log('✅ Found employee by employee_id:', data);
                     return data;
                 }
             } catch (e) {
-                console.log('⚠️ Employee lookup by employee_id failed:', e.message);
+                console.error('⚠️ Employee lookup by employee_id failed:', e.message);
             }
         }
 
@@ -738,11 +737,11 @@ export const employeeApi = {
                     .single();
                 
                 if (!emailError && data) {
-                    console.log('✅ Found employee by email:', data);
+                    // console.log('✅ Found employee by email:', data);
                     return data;
                 }
             } catch (e) {
-                console.log('⚠️ Employee lookup by email failed:', e.message);
+                console.error('⚠️ Employee lookup by email failed:', e.message);
             }
         }
 
@@ -756,11 +755,11 @@ export const employeeApi = {
                     .single();
                 
                 if (!nameError && data) {
-                    console.log('✅ Found employee by exact name:', data);
+                    // console.log('✅ Found employee by exact name:', data);
                     return data;
                 }
             } catch (e) {
-                console.log('⚠️ Employee lookup by exact name failed:', e.message);
+                console.error('⚠️ Employee lookup by exact name failed:', e.message);
             }
         }
 
@@ -784,22 +783,22 @@ export const employeeApi = {
                 const { data, error: partialError } = await nameQuery.limit(1).single();
                 
                 if (!partialError && data) {
-                    console.log('✅ Found employee by partial name match:', data);
+                    // console.log('✅ Found employee by partial name match:', data);
                     return data;
                 }
             } catch (e) {
-                console.log('⚠️ Employee lookup by partial name failed:', e.message);
+                console.error('⚠️ Employee lookup by partial name failed:', e.message);
                 error = e;
             }
         }
 
         // If all strategies failed
-        console.log('❌ All employee lookup strategies failed for user:', user);
+        console.error('❌ All employee lookup strategies failed for user:', user);
         throw new Error(`Employee not found in database. Please ensure the employee record exists with email: ${user.email} or name: ${user.name}`);
     },
 
     async createEmployee(employeeData) {
-        console.log('👤 Creating employee with data:', employeeData);
+        // console.log('👤 Creating employee with data:', employeeData);
         
         // Process the employee data
         const processedData = {
@@ -814,17 +813,17 @@ export const employeeApi = {
         delete processedData.password;
         
         // Ensure first_name and last_name are properly set
-        if (processedData.first_name && processedData.last_name) {
-            console.log('✅ Employee has first_name and last_name:', {
-                first_name: processedData.first_name,
-                last_name: processedData.last_name
-            });
-        } else {
-            console.log('⚠️ Employee missing first_name or last_name:', {
-                first_name: processedData.first_name,
-                last_name: processedData.last_name
-            });
-        }
+        // if (processedData.first_name && processedData.last_name) {
+        //     console.log('✅ Employee has first_name and last_name:', {
+        //         first_name: processedData.first_name,
+        //         last_name: processedData.last_name
+        //     });
+        // } else {
+        //     console.log('⚠️ Employee missing first_name or last_name:', {
+        //         first_name: processedData.first_name,
+        //         last_name: processedData.last_name
+        //     });
+        // }
         
         const { data, error } = await supabase
             .from('employees')
@@ -836,21 +835,48 @@ export const employeeApi = {
             throw error;
         }
         
-        console.log('✅ Employee created successfully:', data[0]);
+        // console.log('✅ Employee created successfully:', data[0]);
         return data[0];
     },
 
     async getEmployees() {
-        const { data, error } = await supabase
-            .from('employees')
-            .select('*')
-            .order('created_at', { ascending: false });
+        // console.log('📋 Fetching employees from database...');
+        
+        try {
+            const { data, error } = await supabase
+                .from('employees')
+                .select('*')
+                .order('created_at', { ascending: false });
 
-        if (error) throw error;
-        return data;
+            if (error) {
+                console.error('❌ Database error in getEmployees:', error);
+                throw error;
+            }
+            
+            // console.log('✅ Successfully fetched employees:', data?.length || 0);
+            if (data && data.length > 0) {
+                // console.log('📋 Sample employee record:', {
+                //     id: data[0].id,
+                //     employee_id: data[0].employee_id,
+                //     name: data[0].name,
+                //     email: data[0].email
+                // });
+            }
+            
+            return data || [];
+        } catch (err) {
+            console.error('❌ Exception in getEmployees:', err);
+            throw err;
+        }
     },
 
     async updateEmployee(employeeId, updates) {
+        // console.log('🔄 Updating employee:', { employeeId, updates });
+        
+        if (!employeeId) {
+            throw new Error('Employee ID is required for updating employee');
+        }
+        
         const { data, error } = await supabase
             .from('employees')
             .update({
@@ -860,7 +886,12 @@ export const employeeApi = {
             .eq('employee_id', employeeId)
             .select();
 
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Error updating employee:', error);
+            throw error;
+        }
+        
+        // console.log('✅ Employee updated successfully:', data[0]);
         return data[0];
     },
 
@@ -879,7 +910,7 @@ export const employeeApi = {
 export const adminApi = {
     // Get all admins from the admins table
     async getAdmins() {
-        console.log('👥 Fetching all admins from database...');
+        // console.log('👥 Fetching all admins from database...');
         
         const { data, error } = await supabase
             .from('admins')
@@ -891,19 +922,19 @@ export const adminApi = {
             throw error;
         }
 
-        console.log('✅ Admins fetched successfully:', data?.length || 0);
+        // console.log('✅ Admins fetched successfully:', data?.length || 0);
         return data || [];
     },
 
     // Get all employees (admins are NOT employees)
     async getAllEmployeesAndAdmins() {
-        console.log('👥 Fetching employees from database...');
+        // console.log('👥 Fetching employees from database...');
         
         try {
             // Get employees from employees table
-            console.log('📋 Fetching from employees table...');
+            // console.log('📋 Fetching from employees table...');
             const employees = await employeeApi.getEmployees();
-            console.log('✅ Employees loaded from database:', employees.length, employees.length > 0 ? employees.slice(0, 2) : 'No employees found');
+            // console.log('✅ Employees loaded from database:', employees.length, employees.length > 0 ? employees.slice(0, 2) : 'No employees found');
             
             // Add role field to employees for consistency
             const employeesWithRole = employees.map(emp => ({
@@ -912,9 +943,9 @@ export const adminApi = {
                 isAdmin: false
             }));
             
-            console.log('🎯 Final result:');
+            // console.log('🎯 Final result:');
             console.log(`   - Total employees: ${employeesWithRole.length}`);
-            console.log('   - Sample data:', employeesWithRole.slice(0, 3));
+            // console.log('   - Sample data:', employeesWithRole.slice(0, 3));
             return employeesWithRole;
             
         } catch (error) {
@@ -926,7 +957,7 @@ export const adminApi = {
     // Simple employee name fetcher
     getEmployeeName: async (userId) => {
         try {
-            console.log('🔍 Fetching employee name for user_id:', userId);
+            // console.log('🔍 Fetching employee name for user_id:', userId);
             
             const { data: employee, error } = await supabase
                 .from('employees')
@@ -935,22 +966,22 @@ export const adminApi = {
                 .single();
 
             if (error) {
-                console.log('❌ Error fetching employee:', error);
+                // console.log('❌ Error fetching employee:', error);
                 return null;
             }
 
             const name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || `Employee ${userId.slice(-4)}`;
-            console.log('✅ Found employee name:', name);
+            // console.log('✅ Found employee name:', name);
             return name;
         } catch (error) {
-            console.log('❌ Exception in getEmployeeName:', error);
+            // console.log('❌ Exception in getEmployeeName:', error);
             return `Employee ${userId.slice(-4)}`;
         }
     },
 
     // Debug function to check database connectivity and data
     async debugDatabase() {
-        console.log('🔍 Debugging database connection and data...');
+        // console.log('🔍 Debugging database connection and data...');
         
         try {
             // Test leave_requests table
@@ -959,11 +990,11 @@ export const adminApi = {
                 .select('*', { count: 'exact' })
                 .limit(5);
             
-            console.log('📋 Leave requests table:', {
-                data: leaveData,
-                error: leaveError,
-                count: leaveCount
-            });
+            // console.log('📋 Leave requests table:', {
+            //     data: leaveData,
+            //     error: leaveError,
+            //     count: leaveCount
+            // });
 
             // Test employees table
             const { data: empData, error: empError, count: empCount } = await supabase
@@ -971,33 +1002,33 @@ export const adminApi = {
                 .select('*', { count: 'exact' })
                 .limit(5);
             
-            console.log('👥 Employees table:', {
-                data: empData,
-                error: empError,
-                count: empCount
-            });
+            // console.log('👥 Employees table:', {
+            //     data: empData,
+            //     error: empError,
+            //     count: empCount
+            // });
 
             // Check for potential relationships
             if (leaveData && leaveData.length > 0 && empData && empData.length > 0) {
-                console.log('🔗 Checking relationships:');
-                console.log('📝 Sample leave request employee_id:', leaveData[0].employee_id);
-                console.log('👤 Sample employee employee_id:', empData[0].employee_id);
-                console.log('👤 Sample employee id:', empData[0].id);
-                console.log('👤 Sample employee name:', empData[0].name);
+                // console.log('🔗 Checking relationships:');
+                // console.log('📝 Sample leave request employee_id:', leaveData[0].employee_id);
+                // console.log('👤 Sample employee employee_id:', empData[0].employee_id);
+                // console.log('👤 Sample employee id:', empData[0].id);
+                // console.log('👤 Sample employee name:', empData[0].name);
                 
                 // Try to find matching patterns
                 const employeeIdsFromRequests = leaveData.map(req => req.employee_id).filter(Boolean);
                 const employeeIds = empData.map(emp => emp.employee_id).filter(Boolean);
                 const empIds = empData.map(emp => emp.id).filter(Boolean);
                 
-                console.log('🔍 Unique employee_ids in leave_requests:', [...new Set(employeeIdsFromRequests)]);
-                console.log('🔍 Unique employee_ids in employees:', [...new Set(employeeIds)]);
-                console.log('🔍 Unique ids in employees:', [...new Set(empIds)]);
+                // console.log('🔍 Unique employee_ids in leave_requests:', [...new Set(employeeIdsFromRequests)]);
+                // console.log('🔍 Unique employee_ids in employees:', [...new Set(employeeIds)]);
+                // console.log('🔍 Unique ids in employees:', [...new Set(empIds)]);
                 
                 // Check for matches
                 const matchByEmployeeId = employeeIdsFromRequests.some(empId => empIds.includes(empId));
                 
-                console.log('🎯 Match found (employee_id -> employee.id):', matchByEmployeeId);
+                // console.log('🎯 Match found (employee_id -> employee.id):', matchByEmployeeId);
             }
 
             return {
@@ -1011,7 +1042,7 @@ export const adminApi = {
     },
     async getDashboardStats() {
         try {
-            console.log('📈 Getting dashboard stats for employees only...');
+            // console.log('📈 Getting dashboard stats for employees only...');
             
             // Get all employees from employees table (NOT admins)
             const { data: employees, error: empError } = await supabase
@@ -1026,7 +1057,7 @@ export const adminApi = {
                 !emp.status || emp.status === 'active' || emp.status === 'Active'
             );
             
-            console.log('📊 Employee Statistics:');
+            // console.log('📊 Employee Statistics:');
             console.log(`   - Total Employees: ${employees?.length || 0}`);
             console.log(`   - Active Employees: ${activeEmployees.length}`);
 
@@ -1038,7 +1069,7 @@ export const adminApi = {
             
             // If no pending requests or status column doesn't exist, get all requests
             if (leaveError || !pendingLeaves || pendingLeaves.length === 0) {
-                console.log('⚠️ No pending status found, getting all leave requests...');
+                // console.log('⚠️ No pending status found, getting all leave requests...');
                 const fallback = await supabase
                     .from('leave_requests')
                     .select('*');
@@ -1047,7 +1078,7 @@ export const adminApi = {
                     pendingLeaves = fallback.data.filter(req => 
                         !req.status || req.status === 'pending' || req.status === null
                     );
-                    console.log('📋 Found leave requests (filtered):', pendingLeaves.length);
+                    // console.log('📋 Found leave requests (filtered):', pendingLeaves.length);
                 } else {
                     console.error('❌ Error fetching all leave requests:', fallback.error);
                     pendingLeaves = [];
@@ -1105,16 +1136,16 @@ export const adminApi = {
             const employeesOnLeave = activeLeaves?.length || 0;
             const activeEmployeesToday = Math.max(0, activeEmployees.length - employeesOnLeave);
             
-            console.log('📊 Dashboard stats calculated:', {
-                totalEmployees: employees?.length || 0,
-                activeEmployees: activeEmployees.length,
-                newEmployeesThisMonth,
-                pendingRequests: pendingLeaves.length,
-                approvedLeaves: approvedLeaves?.length || 0,
-                employeesOnLeave,
-                activeEmployeesToday,
-                pendingTimesheets: pendingTimesheets?.length || 0
-            });
+            // console.log('📊 Dashboard stats calculated:', {
+            //     totalEmployees: employees?.length || 0,
+            //     activeEmployees: activeEmployees.length,
+            //     newEmployeesThisMonth,
+            //     pendingRequests: pendingLeaves.length,
+            //     approvedLeaves: approvedLeaves?.length || 0,
+            //     employeesOnLeave,
+            //     activeEmployeesToday,
+            //     pendingTimesheets: pendingTimesheets?.length || 0
+            // });
 
             return {
                 // Employee counts (admins are NOT included)
@@ -1145,7 +1176,7 @@ export const adminApi = {
     },
 
     async getRecentActivity() {
-        console.log('🔍 Fetching pending leave requests with direct employee join...');
+        // console.log('🔍 Fetching pending leave requests with direct employee join...');
         
         const { data, error } = await supabase
             .from('leave_requests')
@@ -1169,12 +1200,12 @@ export const adminApi = {
             throw error;
         }
 
-        console.log('✅ Fetched pending leaves with employee data:', data);
+        // console.log('✅ Fetched pending leaves with employee data:', data);
         return data;
     },
 
     async getPendingLeaveRequestsWithEmployeeData() {
-        console.log('🔍 Fetching pending leave requests with direct employee join...');
+        // console.log('🔍 Fetching pending leave requests with direct employee join...');
         
         const { data, error } = await supabase
             .from('leave_requests')
@@ -1198,12 +1229,12 @@ export const adminApi = {
             throw error;
         }
 
-        console.log('✅ Fetched pending leaves with employee data:', data);
+        // console.log('✅ Fetched pending leaves with employee data:', data);
         return data;
     },
 
     async approveLeaveRequest(requestId) {
-        console.log('✅ Approving leave request:', requestId);
+        // console.log('✅ Approving leave request:', requestId);
         
         // First, get the leave request details to find the employee
         const { data: leaveRequest, error: fetchError } = await supabase
@@ -1234,7 +1265,7 @@ export const adminApi = {
         // Update employee status to "Leave"
         if (leaveRequest.employee_id) {
             const employeeIdToUpdate = leaveRequest.employee_id;
-            console.log('📝 Updating employee status to Leave for ID:', employeeIdToUpdate);
+            // console.log('📝 Updating employee status to Leave for ID:', employeeIdToUpdate);
             
             // Try updating employees table first (by id)
             const { data: empUpdate1, error: empError1 } = await supabase
@@ -1254,21 +1285,21 @@ export const adminApi = {
                 if (empError2) {
                     console.warn('⚠️ Failed to update employees table by employee_id:', empError2.message);
                 } else {
-                    console.log('✅ Employee status updated to Leave (via employee_id field)');
+                    // console.log('✅ Employee status updated to Leave (via employee_id field)');
                 }
             } else {
-                console.log('✅ Employee status updated to Leave (via id field)');
+                // console.log('✅ Employee status updated to Leave (via id field)');
             }
         } else {
             console.error('⚠️ No employee_id found in leave request, cannot update employee status');
         }
         
-        console.log('✅ Leave request approved successfully:', data[0]);
+        // console.log('✅ Leave request approved successfully:', data[0]);
         return data[0];
     },
 
     async rejectLeaveRequest(requestId, reason = '') {
-        console.log('❌ Rejecting leave request:', requestId);
+        // console.log('❌ Rejecting leave request:', requestId);
         
         // First, get the leave request details to find the employee
         const { data: leaveRequest, error: fetchError } = await supabase
@@ -1299,7 +1330,7 @@ export const adminApi = {
         // Update employee status back to "Active" since leave was rejected
         if (leaveRequest.employee_id) {
             const employeeIdToUpdate = leaveRequest.employee_id;
-            console.log('📝 Updating employee status to Active for ID:', employeeIdToUpdate);
+            // console.log('📝 Updating employee status to Active for ID:', employeeIdToUpdate);
             
             // Try updating employees table first (by id)
             const { data: empUpdate1, error: empError1 } = await supabase
@@ -1319,22 +1350,22 @@ export const adminApi = {
                 if (empError2) {
                     console.warn('⚠️ Failed to update employees table by employee_id:', empError2.message);
                 } else {
-                    console.log('✅ Employee status updated to Active (via employee_id field)');
+                    // console.log('✅ Employee status updated to Active (via employee_id field)');
                 }
             } else {
-                console.log('✅ Employee status updated to Active (via id field)');
+                // console.log('✅ Employee status updated to Active (via id field)');
             }
         } else {
             console.error('⚠️ No employee_id found in leave request, cannot update employee status');
         }
         
-        console.log('✅ Leave request rejected successfully:', data[0]);
+        // console.log('✅ Leave request rejected successfully:', data[0]);
         return data[0];
     },
 
     // Function to update employee status when leave ends
     async updateEmployeeStatusAfterLeave(userId) {
-        console.log('🔄 Checking if employee should return to active status:', userId);
+        // console.log('🔄 Checking if employee should return to active status:', userId);
         
         const today = new Date().toISOString().slice(0, 10);
         
@@ -1354,7 +1385,7 @@ export const adminApi = {
         
         // If no active leaves, set status back to Active
         if (!activeLeaves || activeLeaves.length === 0) {
-            console.log('📝 No active leaves found, setting employee status to Active');
+            // console.log('📝 No active leaves found, setting employee status to Active');
             
             // Try updating by employee_id first
             const { error: empError1 } = await supabase
@@ -1372,13 +1403,13 @@ export const adminApi = {
                 if (empError2) {
                     console.error('❌ Failed to update employee status:', empError2);
                 } else {
-                    console.log('✅ Employee status updated to Active (by id)');
+                    // console.log('✅ Employee status updated to Active (by id)');
                 }
             } else {
-                console.log('✅ Employee status updated to Active (by employee_id)');
+                // console.log('✅ Employee status updated to Active (by employee_id)');
             }
         } else {
-            console.log('📅 Employee still has active leaves, keeping On-leave status');
+            // console.log('📅 Employee still has active leaves, keeping On-leave status');
         }
     }
 };

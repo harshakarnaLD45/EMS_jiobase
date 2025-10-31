@@ -33,25 +33,25 @@ const EmployeeManagement = () => {
 
     // Debug function to test database connections
     // const testDatabaseConnections = async () => {
-    //     console.log('🧪 Testing database connections...');
+    //     //console.log('🧪 Testing database connections...');
         
     //     try {
     //         // Test employees table
-    //         console.log('📋 Testing employees table...');
+    //         //console.log('📋 Testing employees table...');
     //         const { employeeApi, adminApi } = await import('../../utils/supabase');
             
     //         const employees = await employeeApi.getEmployees();
-    //         console.log('✅ Employees table result:', employees);
+    //         //console.log('✅ Employees table result:', employees);
             
     //         // Test admins table
-    //         console.log('👑 Testing admins table...');
+    //         //console.log('👑 Testing admins table...');
     //         const admins = await adminApi.getAdmins();
-    //         console.log('✅ Admins table result:', admins);
+    //         //console.log('✅ Admins table result:', admins);
             
     //         // Test combined function
-    //         console.log('🔗 Testing combined function...');
+    //         //console.log('🔗 Testing combined function...');
     //         const combined = await adminApi.getAllEmployeesAndAdmins();
-    //         console.log('✅ Combined result:', combined);
+    //         //console.log('✅ Combined result:', combined);
             
     //         setNotification({
     //             type: 'success',
@@ -207,7 +207,14 @@ const EmployeeManagement = () => {
                             if (!confirmed) return;
 
                             // Update employee status to "Terminated" instead of deleting
-                            await updateEmployee(employee.id, { 
+                            const employeeIdToUpdate = employee.employee_id || employee.id;
+                            //console.log('🔄 Terminating employee:', { employee, employeeIdToUpdate });
+                            
+                            if (!employeeIdToUpdate) {
+                                throw new Error('Employee ID not found. Cannot update employee status.');
+                            }
+                            
+                            await updateEmployee(employeeIdToUpdate, { 
                                 status: 'Terminated',
                                 terminated_at: new Date().toISOString()
                             });

@@ -16,19 +16,19 @@ export function EmployeeProvider({ children }) {
         try {
             setLoading(true);
             setError(null);
-            console.log('🔄 EmployeeContext: Loading employees from database...');
+            //console.log('🔄 EmployeeContext: Loading employees from database...');
             
             // Get employees only (NOT admins)
             const data = await adminApi.getAllEmployeesAndAdmins();
             
-            console.log('📊 EmployeeContext: Setting employee data:', {
-                totalRecords: data.length,
-                employees: data.filter(d => d.role === 'employee').length,
-                sampleData: data.slice(0, 2)
-            });
+            // console.log('📊 EmployeeContext: Setting employee data:', {
+            //     totalRecords: data.length,
+            //     employees: data.filter(d => d.role === 'employee').length,
+            //     sampleData: data.slice(0, 2)
+            // });
             
             setEmployees(data);
-            console.log('✅ EmployeeContext: Successfully loaded and set employee data');
+            //console.log('✅ EmployeeContext: Successfully loaded and set employee data');
             
         } catch (err) {
             console.error('❌ EmployeeContext: Error loading employees:', err);
@@ -42,7 +42,7 @@ export function EmployeeProvider({ children }) {
     const addEmployee = async (employeeData) => {
         try {
             setError(null);
-            console.log('🔄 EmployeeContext: Adding new employee with data:', employeeData);
+            //console.log('🔄 EmployeeContext: Adding new employee with data:', employeeData);
             
             // Validate required fields
             if (!employeeData.first_name || !employeeData.last_name) {
@@ -66,7 +66,7 @@ export function EmployeeProvider({ children }) {
             // Add the new employee to the state
             setEmployees(prev => [newEmployee, ...prev]);
             
-            console.log('✅ EmployeeContext: Employee added successfully:', newEmployee);
+            //console.log('✅ EmployeeContext: Employee added successfully:', newEmployee);
             return newEmployee;
         } catch (err) {
             console.error('❌ EmployeeContext: Error adding employee:', err);

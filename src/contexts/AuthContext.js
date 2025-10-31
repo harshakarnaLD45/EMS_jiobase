@@ -11,14 +11,14 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         // Check for existing authentication state
         const initializeAuth = async () => {
-            console.log('🔄 Initializing authentication...');
+            //console.log('🔄 Initializing authentication...');
             
             try {
                 // First check localStorage for persisted session
                 const savedUser = localStorage.getItem('user');
                 if (savedUser) {
                     const parsedUser = JSON.parse(savedUser);
-                    console.log('📱 Found saved user in localStorage:', parsedUser);
+                    //console.log('📱 Found saved user in localStorage:', parsedUser);
                     setUser(parsedUser);
                     
                     // Set loading to false early if we have a saved user
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
 
                 // Then check Supabase auth (but don't block on it if we have savedUser)
                 const currentUser = await authApi.getCurrentUser();
-                console.log('🔍 Supabase current user:', currentUser);
+                //console.log('🔍 Supabase current user:', currentUser);
                 
                 if (currentUser) {
                     setSupabaseUser(currentUser);
@@ -42,9 +42,9 @@ export function AuthProvider({ children }) {
                         };
                         setUser(userData);
                         localStorage.setItem('user', JSON.stringify(userData));
-                        console.log('✅ Supabase user authenticated:', userData);
+                        //console.log('✅ Supabase user authenticated:', userData);
                     } catch (profileError) {
-                        console.log('⚠️ No profile found, using basic user data');
+                        //console.log('⚠️ No profile found, using basic user data');
                         const userData = {
                             id: currentUser.id,
                             email: currentUser.email,
@@ -56,20 +56,20 @@ export function AuthProvider({ children }) {
                     }
                 } else if (!savedUser) {
                     // No Supabase user and no saved user
-                    console.log('❌ No authenticated user found');
+                    //console.log('❌ No authenticated user found');
                     setUser(null);
                     setLoading(false);
                 } else {
                     // We have savedUser but no Supabase session
                     // Keep the saved user but log the discrepancy
-                    console.log('⚠️ Have localStorage user but no Supabase session - keeping user logged in');
+                    //console.log('⚠️ Have localStorage user but no Supabase session - keeping user logged in');
                 }
             } catch (error) {
                 console.error('❌ Auth initialization error:', error);
                 // Still try to use saved user from localStorage
                 const savedUser = localStorage.getItem('user');
                 if (savedUser) {
-                    console.log('🔄 Falling back to localStorage user');
+                    //console.log('🔄 Falling back to localStorage user');
                     setUser(JSON.parse(savedUser));
                 } else {
                     setUser(null);
@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
             } finally {
                 // Only set loading to false if we haven't already done so
                 setLoading(false);
-                console.log('✅ Auth initialization complete');
+                //console.log('✅ Auth initialization complete');
             }
         };
 
@@ -85,7 +85,7 @@ export function AuthProvider({ children }) {
 
         // Listen for auth changes
         const { data: { subscription } } = authApi.onAuthStateChange(async (event, session) => {
-            console.log('🔄 Auth state change:', event, session?.user?.id);
+            //console.log('🔄 Auth state change:', event, session?.user?.id);
             
             if (session?.user) {
                 setSupabaseUser(session.user);
@@ -99,9 +99,9 @@ export function AuthProvider({ children }) {
                     };
                     setUser(userData);
                     localStorage.setItem('user', JSON.stringify(userData));
-                    console.log('✅ User profile updated:', userData);
+                    //console.log('✅ User profile updated:', userData);
                 } catch (error) {
-                    console.log('⚠️ No profile found, using session data');
+                    //console.log('⚠️ No profile found, using session data');
                     const userData = {
                         id: session.user.id,
                         email: session.user.email,
@@ -115,12 +115,12 @@ export function AuthProvider({ children }) {
                 // Check if we should clear user data or keep localStorage user
                 const savedUser = localStorage.getItem('user');
                 if (event === 'SIGNED_OUT' || !savedUser) {
-                    console.log('❌ Session ended, clearing user data');
+                    //console.log('❌ Session ended, clearing user data');
                     setSupabaseUser(null);
                     setUser(null);
                     localStorage.removeItem('user');
                 } else {
-                    console.log('⚠️ Supabase session lost but keeping localStorage user');
+                    //console.log('⚠️ Supabase session lost but keeping localStorage user');
                     setSupabaseUser(null);
                     // Keep the user from localStorage
                 }
@@ -133,20 +133,20 @@ export function AuthProvider({ children }) {
     }, []);
 
     const login = async (userData) => {
-        console.log('🔑 Login attempt:', userData);
+        //console.log('🔑 Login attempt:', userData);
         
         if (userData.isDemo) {
             // Demo user login (existing functionality)
-            console.log('🎭 Demo user login');
+            //console.log('🎭 Demo user login');
             setUser(userData);
             localStorage.setItem('user', JSON.stringify(userData));
             return userData;
         } else if (userData.isEmployeeOnly) {
             // Employee-only authentication - no fallbacks
             try {
-                console.log('🔐 Employee-only authentication attempt');
+                //console.log('🔐 Employee-only authentication attempt');
                 const employeeUser = await authApi.signInEmployee(userData.email, userData.password);
-                console.log('✅ Employee login successful:', employeeUser);
+                //console.log('✅ Employee login successful:', employeeUser);
                 
                 setUser(employeeUser);
                 localStorage.setItem('user', JSON.stringify(employeeUser));
@@ -159,34 +159,34 @@ export function AuthProvider({ children }) {
         } else {
             // NEW PRIORITY: Try admin login first, then employee login
             try {
-                console.log('🔐 Attempting admin login first');
+                //console.log('🔐 Attempting admin login first');
                 const adminUser = await authApi.signInAdmin(userData.email, userData.password);
-                console.log('✅ Admin login successful:', adminUser);
+                //console.log('✅ Admin login successful:', adminUser);
                 
                 setUser(adminUser);
                 localStorage.setItem('user', JSON.stringify(adminUser));
                 return adminUser;
                 
             } catch (adminError) {
-                console.log('⚠️ Admin login failed, trying employee login:', adminError.message);
+                //console.log('⚠️ Admin login failed, trying employee login:', adminError.message);
                 
                 try {
-                    console.log('🔐 Attempting employee login');
+                    //console.log('🔐 Attempting employee login');
                     const employeeUser = await authApi.signInEmployee(userData.email, userData.password);
-                    console.log('✅ Employee login successful:', employeeUser);
+                    //console.log('✅ Employee login successful:', employeeUser);
                     
                     setUser(employeeUser);
                     localStorage.setItem('user', JSON.stringify(employeeUser));
                     return employeeUser;
                     
                 } catch (employeeError) {
-                    console.log('⚠️ Employee login failed, trying Supabase auth:', employeeError.message);
+                    //console.log('⚠️ Employee login failed, trying Supabase auth:', employeeError.message);
                     
                     try {
                         // Final fallback to Supabase authentication
-                        console.log('🔐 Supabase authentication attempt');
+                        //console.log('🔐 Supabase authentication attempt');
                         const { user: authUser } = await authApi.signIn(userData.email, userData.password);
-                        console.log('✅ Supabase auth successful:', authUser);
+                        //console.log('✅ Supabase auth successful:', authUser);
                         
                         // Immediately set user data to prevent logout on refresh
                         const tempUserData = {
@@ -225,19 +225,19 @@ export function AuthProvider({ children }) {
 
     const isAuthenticated = () => {
         const authenticated = user !== null;
-        console.log('🔍 isAuthenticated check:', { user: user, authenticated: authenticated });
+        //console.log('🔍 isAuthenticated check:', { user: user, authenticated: authenticated });
         return authenticated;
     };
 
     const isAdmin = () => {
         const result = user && (user.role === 'admin' || user.role === 'super_admin' || user.isAdmin === true || user.loginType === 'admin');
-        console.log('🔍 isAdmin check:', { user: user, role: user?.role, isAdmin: user?.isAdmin, loginType: user?.loginType, result: result });
+        //console.log('🔍 isAdmin check:', { user: user, role: user?.role, isAdmin: user?.isAdmin, loginType: user?.loginType, result: result });
         return result;
     };
 
     const isEmployee = () => {
         const result = user && user.role === 'employee';
-        console.log('🔍 isEmployee check:', { user: user, role: user?.role, result: result });
+        //console.log('🔍 isEmployee check:', { user: user, role: user?.role, result: result });
         return result;
     };
 

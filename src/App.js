@@ -16,27 +16,27 @@ import Attendance from './pages/attendencepage/attendencepage.js';
 const DefaultRedirect = () => {
   const { user, isAdmin, isEmployee } = useAuth();
   
-  console.log('🎯 DefaultRedirect - User type check:', {
-    user: user?.email,
-    isAdmin: isAdmin(),
-    isEmployee: isEmployee(),
-    userRole: user?.role
-  });
+  // console.log('🎯 DefaultRedirect - User type check:', {
+  //   user: user?.email,
+  //   isAdmin: isAdmin(),
+  //   isEmployee: isEmployee(),
+  //   userRole: user?.role
+  // });
   
   // If admin, redirect to admin dashboard
   if (isAdmin()) {
-    console.log('✅ Admin detected - redirecting to /admin');
+    //console.log('✅ Admin detected - redirecting to /admin');
     return <Navigate to="/admin" replace />;
   }
   
   // If employee, redirect to regular dashboard
   if (isEmployee()) {
-    console.log('✅ Employee detected - redirecting to /dashboard');
+    ////console.log('✅ Employee detected - redirecting to /dashboard');
     return <Navigate to="/dashboard" replace />;
   }
   
   // Fallback to dashboard if user type is unclear
-  console.log('⚠️ User type unclear - defaulting to /dashboard');
+  //console.log('⚠️ User type unclear - defaulting to /dashboard');
   return <Navigate to="/dashboard" replace />;
 };
 

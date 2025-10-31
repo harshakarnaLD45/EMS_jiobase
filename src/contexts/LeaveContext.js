@@ -31,10 +31,10 @@ export function LeaveProvider({ children }) {
             
             // Use employee_id if available, otherwise fallback to user.id
             const employeeId = user.employee_id || user.id;
-            console.log('🏖️ Loading leave balance for employee ID:', employeeId);
+            //console.log('🏖️ Loading leave balance for employee ID:', employeeId);
             
             const balance = await leaveApi.getLeaveBalanceByEmployeeId(employeeId);
-            console.log('✅ Leave balance loaded:', balance);
+            //console.log('✅ Leave balance loaded:', balance);
             setLeaveBalance(balance);
         } catch (err) {
             console.error('❌ Error loading leave balance:', err);
@@ -42,7 +42,7 @@ export function LeaveProvider({ children }) {
             
             // If no balance found, set default values
             if (err.message.includes('No rows') || err.message.includes('not found')) {
-                console.log('⚠️ No leave balance found, setting default values');
+                //console.log('⚠️ No leave balance found, setting default values');
                 setLeaveBalance({
                     employee_id: user.employee_id || user.id,
                     sick_leave: 12,

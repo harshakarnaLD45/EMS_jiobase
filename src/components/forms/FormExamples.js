@@ -32,18 +32,45 @@ export const LeaveRequestFormWithCalendar = ({ onSubmit }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Leave Request</h2>
+    <div style={{
+      maxWidth: '28rem',
+      margin: '0 auto',
+      padding: '1.5rem',
+      backgroundColor: 'white',
+      borderRadius: '0.5rem',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+    }}>
+      <h2 style={{
+        fontSize: '1.5rem',
+        fontWeight: 'bold',
+        marginBottom: '1.5rem',
+        color: '#1f2937'
+      }}>Leave Request</h2>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Leave Type *
           </label>
           <select
             value={formData.leaveType}
             onChange={(e) => setFormData(prev => ({ ...prev, leaveType: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              outline: 'none',
+              fontSize: '1rem'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
             required
           >
             <option value="">Select leave type</option>
@@ -55,34 +82,71 @@ export const LeaveRequestFormWithCalendar = ({ onSubmit }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Leave Period *
           </label>
           <DateRangePicker
             selectedRange={formData.dateRange}
             onRangeSelect={handleDateRangeChange}
             placeholder="Select leave dates"
-            className="w-full"
+            style={{ width: '100%' }}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Reason
           </label>
           <textarea
             value={formData.reason}
             onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              outline: 'none',
+              fontSize: '1rem',
+              resize: 'vertical'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
             rows="3"
             placeholder="Explain the reason for your leave request..."
           />
         </div>
 
         {formData.dateRange?.from && formData.dateRange?.to && (
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h4 className="font-medium text-blue-800 mb-2">Leave Summary:</h4>
-            <div className="text-sm text-blue-700 space-y-1">
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '0.375rem'
+          }}>
+            <h4 style={{
+              fontWeight: '500',
+              color: '#1e40af',
+              marginBottom: '0.5rem'
+            }}>Leave Summary:</h4>
+            <div style={{
+              fontSize: '0.875rem',
+              color: '#1d4ed8',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.25rem'
+            }}>
               <p>From: {format(formData.dateRange.from, 'EEEE, MMMM dd, yyyy')}</p>
               <p>To: {format(formData.dateRange.to, 'EEEE, MMMM dd, yyyy')}</p>
               <p>Total Days: {Math.ceil((formData.dateRange.to - formData.dateRange.from) / (1000 * 60 * 60 * 24)) + 1}</p>
@@ -93,7 +157,29 @@ export const LeaveRequestFormWithCalendar = ({ onSubmit }) => {
         <button
           type="submit"
           disabled={!formData.leaveType || !formData.dateRange?.from || !formData.dateRange?.to}
-          className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            padding: '0.5rem 1rem',
+            backgroundColor: !formData.leaveType || !formData.dateRange?.from || !formData.dateRange?.to ? '#9ca3af' : '#2563eb',
+            color: 'white',
+            borderRadius: '0.375rem',
+            border: 'none',
+            outline: 'none',
+            cursor: !formData.leaveType || !formData.dateRange?.from || !formData.dateRange?.to ? 'not-allowed' : 'pointer',
+            fontSize: '1rem',
+            fontWeight: '500',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            if (!(!formData.leaveType || !formData.dateRange?.from || !formData.dateRange?.to)) {
+              e.target.style.backgroundColor = '#1d4ed8';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!(!formData.leaveType || !formData.dateRange?.from || !formData.dateRange?.to)) {
+              e.target.style.backgroundColor = '#2563eb';
+            }
+          }}
         >
           Submit Leave Request
         </button>
@@ -132,31 +218,64 @@ export const TimesheetFormWithCalendar = ({ onSubmit }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Timesheet Entry</h2>
+    <div style={{
+      maxWidth: '28rem',
+      margin: '0 auto',
+      padding: '1.5rem',
+      backgroundColor: 'white',
+      borderRadius: '0.5rem',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+    }}>
+      <h2 style={{
+        fontSize: '1.5rem',
+        fontWeight: 'bold',
+        marginBottom: '1.5rem',
+        color: '#1f2937'
+      }}>Timesheet Entry</h2>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Work Period *
           </label>
           <DateRangePicker
             selectedRange={formData.dateRange}
             onRangeSelect={handleDateRangeChange}
             placeholder="Select work period"
-            className="w-full"
+            style={{ width: '100%' }}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Total Hours *
           </label>
           <input
             type="number"
             value={formData.totalHours}
             onChange={(e) => setFormData(prev => ({ ...prev, totalHours: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              outline: 'none',
+              fontSize: '1rem'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
             min="0"
             max="200"
             step="0.5"
@@ -166,35 +285,82 @@ export const TimesheetFormWithCalendar = ({ onSubmit }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Tasks Completed
           </label>
           <textarea
             value={formData.tasks}
             onChange={(e) => setFormData(prev => ({ ...prev, tasks: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              outline: 'none',
+              fontSize: '1rem',
+              resize: 'vertical'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
             rows="3"
             placeholder="Describe the tasks you completed..."
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
             Notes
           </label>
           <textarea
             value={formData.notes}
             onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              outline: 'none',
+              fontSize: '1rem',
+              resize: 'vertical'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
             rows="2"
             placeholder="Any additional notes..."
           />
         </div>
 
         {formData.dateRange?.from && formData.dateRange?.to && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-            <h4 className="font-medium text-green-800 mb-2">Timesheet Summary:</h4>
-            <div className="text-sm text-green-700 space-y-1">
+          <div style={{
+            padding: '1rem',
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: '0.375rem'
+          }}>
+            <h4 style={{
+              fontWeight: '500',
+              color: '#166534',
+              marginBottom: '0.5rem'
+            }}>Timesheet Summary:</h4>
+            <div style={{
+              fontSize: '0.875rem',
+              color: '#15803d',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.25rem'
+            }}>
               <p>Period: {format(formData.dateRange.from, 'MMM dd')} - {format(formData.dateRange.to, 'MMM dd, yyyy')}</p>
               <p>Working Days: {Math.ceil((formData.dateRange.to - formData.dateRange.from) / (1000 * 60 * 60 * 24)) + 1}</p>
               {formData.totalHours && (
@@ -207,7 +373,29 @@ export const TimesheetFormWithCalendar = ({ onSubmit }) => {
         <button
           type="submit"
           disabled={!formData.dateRange?.from || !formData.dateRange?.to || !formData.totalHours}
-          className="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            padding: '0.5rem 1rem',
+            backgroundColor: !formData.dateRange?.from || !formData.dateRange?.to || !formData.totalHours ? '#9ca3af' : '#059669',
+            color: 'white',
+            borderRadius: '0.375rem',
+            border: 'none',
+            outline: 'none',
+            cursor: !formData.dateRange?.from || !formData.dateRange?.to || !formData.totalHours ? 'not-allowed' : 'pointer',
+            fontSize: '1rem',
+            fontWeight: '500',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            if (!(!formData.dateRange?.from || !formData.dateRange?.to || !formData.totalHours)) {
+              e.target.style.backgroundColor = '#047857';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!(!formData.dateRange?.from || !formData.dateRange?.to || !formData.totalHours)) {
+              e.target.style.backgroundColor = '#059669';
+            }
+          }}
         >
           Submit Timesheet
         </button>

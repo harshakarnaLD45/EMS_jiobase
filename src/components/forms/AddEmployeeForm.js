@@ -212,7 +212,7 @@ const AddEmployeeForm = ({ mode = 'add', employeeData = null, onClose, onSuccess
                                     value={formData.department}
                                     onChange={(e) => {
                                         const value = e.target.value;
-                                        console.log('Department selected:', value);
+                                        //console.log('Department selected:', value);
                                         setFormData(prev => ({
                                             ...prev,
                                             department: value,
@@ -243,7 +243,7 @@ const AddEmployeeForm = ({ mode = 'add', employeeData = null, onClose, onSuccess
                                     value={formData.position}
                                     onChange={(e) => {
                                         const value = e.target.value;
-                                        console.log('Position selected:', value);
+                                        //console.log('Position selected:', value);
                                         setFormData(prev => ({
                                             ...prev,
                                             position: value
