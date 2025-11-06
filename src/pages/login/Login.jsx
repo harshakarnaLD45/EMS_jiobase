@@ -92,7 +92,7 @@ const Login = () => {
                         </div>
                     )}
                     
-                    <div className="auth_info" style={{ 
+                    {/* <div className="auth_info" style={{ 
                         marginBottom: '1rem', 
                         padding: '0.75rem',
                         backgroundColor: '#f0fdf4',
@@ -103,7 +103,7 @@ const Login = () => {
                         <strong>🔐 Admin & Employee Authentication:</strong><br/>
                         Use your admin or employee email and password. Admin login takes priority.<br/>
                         <em style={{ color: '#6b7280' }}>Admin: anitha.boppidi@ldintertech.com  pass:- Anith@EMS26_admin  <br/> Employee: harsha.karna@ldintertech.com  pass:- 0WJs8Ibxwt</em>
-                    </div>
+                    </div> */}
                     
                     <div className="form_group">
                         <label htmlFor="email " className='bodyMediumText4'>Email Address</label>

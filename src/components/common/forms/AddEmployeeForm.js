@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Wand2 } from 'lucide-react';
-import { useEmployees } from '../../contexts/EmployeeContext';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import { useEmployees } from '../../../contexts/EmployeeContext';
+import { Button } from '../../ui/button';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../ui/card';
 
 
 const AddEmployeeForm = ({ mode = 'add', employeeData = null, onClose, onSuccess, onError }) => {

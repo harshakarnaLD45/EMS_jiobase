@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Clock, Plus } from 'lucide-react';
-import { timesheetApi } from '../../utils/supabase';
-import { useAuth } from '../../contexts/AuthContext';
+import { timesheetApi } from '../../../utils/supabase';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const styles = {
   container: {

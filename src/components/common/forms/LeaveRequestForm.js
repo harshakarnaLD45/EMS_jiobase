@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { X, Calendar, FileText } from 'lucide-react';
-import { useLeave } from '../../contexts/LeaveContext';
-import { useAuth } from '../../contexts/AuthContext';
+import { useLeave } from '../../../contexts/LeaveContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import { Input, InputAdornment } from '@mui/material';
-import { leaveApi } from '../../utils/supabase';
+import { leaveApi } from '../../../utils/supabase';
 
 const styles = {
   container: {
