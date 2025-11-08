@@ -254,6 +254,52 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
       setIsSubmitting(false);
     }
   };
+  
+  // Converts decimal hours (e.g., 8.5) → "8 hr : 30 min"
+    const handleTaskChange = (index, field, value) => {
+  setFormData(prev => {
+    const newTasks = [...prev.tasks];
+    const task = { ...newTasks[index] };
+
+    if (field === 'hours' || field === 'minutes') {
+      // Convert the existing timeSpent (decimal) to h/m
+      const [h, m] = formatHoursToHHMM(task.timeSpent).split(':').map(Number);
+      const newHours = field === 'hours' ? parseInt(value) || 0 : h;
+      const newMinutes = field === 'minutes' ? parseInt(value) || 0 : m;
+
+      // Convert back to decimal hours
+      task.timeSpent = (newHours + newMinutes / 60).toFixed(2);
+    } else {
+      task[field] = value;
+    }
+
+    newTasks[index] = task;
+
+    // Recalculate total hours
+    const totalHours = newTasks.reduce((sum, t) => sum + (parseFloat(t.timeSpent) || 0), 0);
+
+    return {
+      ...prev,
+      tasks: newTasks,
+      hoursWorked: totalHours.toFixed(2),
+    };
+  });
+};
+
+
+const formatHoursToHHMM = (hours) => {
+  if (isNaN(hours) || hours === null || hours === undefined) return '00:00';
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+const formatTotalHours = (decimalHours) => {
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  return `${hours} hrs ${minutes} min`;
+};
+
+ 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -263,27 +309,7 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
     }));
   };
 
-  const handleTaskChange = (index, field, value) => {
-    setFormData(prev => {
-      const newTasks = [...prev.tasks];
-      newTasks[index] = { ...newTasks[index], [field]: value };
-
-      // If changing timeSpent, update total hours worked
-      if (field === 'timeSpent') {
-        const totalHours = newTasks.reduce((sum, task) => {
-          return sum + (parseFloat(task.timeSpent) || 0);
-        }, 0);
-
-        return {
-          ...prev,
-          tasks: newTasks,
-          hoursWorked: totalHours.toString()
-        };
-      }
-
-      return { ...prev, tasks: newTasks };
-    });
-  };
+ 
 
   const addTask = () => {
     setFormData(prev => ({
@@ -337,158 +363,169 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
               Work Date <span style={styles.required}>*</span>
             </label>
             <div style={styles.inputWrapper}>
-              <input className='bodyMediumText4'
+              <input
+                className='bodyMediumText4'
                 type="date"
                 name="workDate"
                 required
                 value={formData.workDate}
                 onChange={handleChange}
                 min={(() => {
-                  const pastTwoDays = new Date();
-                  pastTwoDays.setDate(pastTwoDays.getDate() - 2);
-                  return pastTwoDays.toISOString().split('T')[0];
+                const pastTwoDays = new Date();
+                pastTwoDays.setDate(pastTwoDays.getDate() - 2);
+                return pastTwoDays.toISOString().split('T')[0];
                 })()}
-                onFocus={(e) => e.target.showPicker && e.target.showPicker()}
-                style={{ ...styles.input, ...styles.inputWithIcon  }}
+                max={new Date().toISOString().split('T')[0]} // 👈 disables future dates in calendar
+                onFocus={(e) => e.target.showPicker && e.target.showPicker()} // 👈 keeps picker auto-open
+                style={{ ...styles.input, ...styles.inputWithIcon }}
               />
-            </div>
-          </div>
-
-
-
-          {/* Tasks Table */}
-          <div>
-            <label  className='bodyMediumText4' style={styles.label}>
-              Tasks <span style={styles.required}>*</span>
-            </label>
-            <table style={styles.taskTable}>
-              <thead>
-                <tr>
-                  <th  className='bodyMediumText4' style={styles.tableHeader}>Task Title</th>
-                  <th  className='bodyMediumText4' style={styles.tableHeader}>Duration</th>
-                  <th  className='bodyMediumText4' style={styles.tableHeader}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {formData.tasks.map((task, index) => (
-                  <tr key={index}>
-                    <td style={styles.tableCell}>
-                      <input className='bodyMediumText4'
-                        type="text"
-                        value={task.taskTitle}
-                        onChange={(e) => handleTaskChange(index, 'taskTitle', e.target.value)}
-                        placeholder="Enter task description"
-                        style={styles.taskInput}
-                        required
-                      />
-                    </td>
-                    <td style={styles.tableCell}>
-                      <div
-                        style={{
-                          position: 'relative',
-                          width: '100%',
-                        }}
-                      >
-                        <input className='bodyMediumText4'
-                          type="number"
-                          value={task.timeSpent}
-                          onChange={(e) => handleTaskChange(index, 'timeSpent', e.target.value)}
-                          min="0.1"
-                          max="24"
-                          step="0.1"
-                          style={{
-                            ...styles.taskInput,
-                            width: '100%',
-                            // paddingRight: '50px', // space for the placeholder
-                            boxSizing: 'border-color',
-                            borderColor: (!task.timeSpent || parseFloat(task.timeSpent) <= 0) ? '#ef4444' : '#d1d5db'
-                          }}
-                          placeholder="0.0"
-                          required
-                        />
-
-                        <span className='bodyMediumText4'
-                          style={{
-                            position: 'absolute',
-                            right: '25px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: '#9ca3af',
-                            pointerEvents: 'none',
-                            fontSize: '0.9em',
-                          }}
-                        >
-                          HH:MM
-                        </span>
-                      </div>
-                    </td>
-
-                    <td style={styles.tableCell}>
-                      {formData.tasks.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeTask(index)}
-                          style={styles.removeTaskButton}
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button className='bodyMediumText4'
-              type="button"
-              onClick={addTask}
-              style={styles.addTaskButton}
-            >
-              <Plus size={16} /> Add Task
-            </button>
-          </div>
-          <div style={styles.gridContainer}>
-            {/* Hours Worked */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label  className='bodyMediumText3' style={styles.label}>
-                Total Hours  <span style={styles.required}>*</span>
-              </label>
-             
-              <div style={{ ...styles.inputWrapper, position: 'relative', display: 'inline-block', width: '100%', }}>
-                <input className='bodyMediumText4'
-                  type="number"
-                  name="hoursWorked"
-                  readOnly
-                  value={formData.hoursWorked}
-                  style={{
-                    width: '150px',
-                    backgroundColor: '#f3f4f6',
-                    cursor: 'not-allowed',
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: '0.5rem',
-                    paddingRight: '50px',   // create space for the placeholder
-                    textAlign: 'left',      // keep text normal
-                  }}
-                />
-                <span className='bodyMediumText4'
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#9ca3af',       // placeholder-like color
-                    pointerEvents: 'none',  // click-through
-                    // fontStyle: 'italic',
-                  }}
-                >
-                  HH:MM
-                </span>
-              </div>
 
             </div>
-
-
           </div>
-        </div>
+
+
+
+         {/* Tasks Table */}
+         <div> 
+           <label className='bodyMediumText4' style={styles.label}>
+            Tasks <span style={styles.required}>*</span>
+         </label>
+       <table style={styles.taskTable}>
+       <thead>
+      <tr>
+        <th className='bodyMediumText4' style={styles.tableHeader}>Task Title</th>
+        <th className='bodyMediumText4' style={styles.tableHeader}>Description</th> {/* New column */}
+        <th className='bodyMediumText4' style={styles.tableHeader}>Duration</th>
+        <th className='bodyMediumText4' style={styles.tableHeader}></th>
+      </tr>
+    </thead>
+    <tbody>
+      {formData.tasks.map((task, index) => (
+        <tr key={index}>
+          <td style={styles.tableCell}>
+            <input
+              className='bodyMediumText4'
+              type="text"
+              value={task.taskTitle}
+              onChange={(e) => handleTaskChange(index, 'taskTitle', e.target.value)}
+              placeholder="Enter task title"
+              style={styles.taskInput}
+              required
+            />
+          </td>
+
+          {/* New Description Column */}
+          <td style={styles.tableCell}>
+            <input
+              className='bodyMediumText4'
+              type="text"
+              value={task.description || ''}
+              onChange={(e) => handleTaskChange(index, 'description', e.target.value)}
+              placeholder="Enter task description"
+              style={styles.taskInput}
+            />
+          </td>
+
+          <td style={styles.tableCell}>
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+      type="number"
+      className="bodyMediumText4"
+      name="hours"
+      value={formatHoursToHHMM(task.timeSpent).split(':')[0]}
+      onChange={(e) => handleTaskChange(index, 'hours', e.target.value)}
+      min="0"
+      max="23"
+      style={{
+        width: '50px',
+        backgroundColor: 'transparent',
+        border: '1px solid #d1d5db',
+        textAlign: 'center',
+        color: '#374151',
+        borderRadius: '6px',
+      }}
+    />
+    <span className="bodyMediumText4" style={{ color: '#6b7280' }}>hr :</span>
+
+    {/* Minutes */}
+    <input
+      type="number"
+      className="bodyMediumText4"
+      name="minutes"
+      value={formatHoursToHHMM(task.timeSpent).split(':')[1]}
+      onChange={(e) => handleTaskChange(index, 'minutes', e.target.value)}
+      min="0"
+      max="59"
+      style={{
+        width: '50px',
+        backgroundColor: 'transparent',
+        border: '1px solid #d1d5db',
+        textAlign: 'center',
+        color: '#374151',
+        borderRadius: '6px',
+      }}
+    />
+    <span className="bodyMediumText4" style={{ color: '#6b7280' }}>min</span>
+  </div>
+          </td>
+
+          <td style={styles.tableCell}>
+            {formData.tasks.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeTask(index)}
+                style={styles.removeTaskButton}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <button className='bodyMediumText4'
+    type="button"
+    onClick={addTask}
+    style={styles.addTaskButton}
+  >
+    <Plus size={16} /> Add Task
+  </button>
+</div>
+<div style={styles.gridContainer}>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <label className="bodyMediumText3" style={styles.label}>
+      Total Hours <span style={styles.required}>*</span>
+    </label>
+
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        backgroundColor: '#f3f4f6',
+        borderRadius: '0.5rem',
+        padding: '0.5rem 0.75rem',
+        width: 'fit-content',
+      }}
+    >
+  <span className="bodyMediumText4" style={{ color: '#374151' }}>
+  {(() => {
+    const total = formData.tasks.reduce((sum, task) => {
+      const time = parseFloat(task.timeSpent);
+      return sum + (isNaN(time) ? 0 : time);
+    }, 0);
+
+    const hours = Math.floor(total);
+    const minutes = Math.round((total - hours) * 60);
+    return `${hours} hrs ${minutes} min`;
+  })()}
+</span>
+ </div>
+  </div>
+</div>
+
 
         {/* Validation Error Display */}
         {validationError && (
@@ -529,6 +566,7 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
           >
             {isSubmitting ? 'Saving...' : 'Submit for Approval'}
           </button>
+        </div>
         </div>
       </form>
     </div>

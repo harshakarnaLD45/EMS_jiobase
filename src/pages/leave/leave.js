@@ -20,60 +20,48 @@ const Leave = () => {
     refreshBalance
   } = useLeave();
   
-  // Add state for leave requests since it's not in the context
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [filters, setFilters] = useState({
     status: 'all',
-    filterMode: 'all', // 'all', 'week', 'month', or 'custom'
+    filterMode: 'all', // 'all', 'week', 'month', 'custom'
     startDate: '',
     endDate: '',
-    employee: 'all' // For admin view - filter by employee
+    employee: 'all'
   });
   
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [formError, setFormError] = useState('');
+  const [actionStatus, setActionStatus] = useState({});
+  const [actionLoading, setActionLoading] = useState(null);
 
-  // Load data when component mounts or user changes
   useEffect(() => {
     if (user) {
       refreshLeaveData();
     }
   }, [user, isAdmin]);
 
-  // Close calendar when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (calendarVisible && !event.target.closest('.history_header')) {
         setCalendarVisible(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [calendarVisible]);
 
-  // Function to load leave requests
   const loadLeaveRequests = async () => {
     if (!user) return;
-    
     try {
       const { leaveApi } = await import('../../utils/supabase');
       let requests = [];
-      
       if (isAdmin) {
-        //console.log('� Admin view: Loading ALL employee leave requests');
         requests = await leaveApi.getAllLeaveRequestsWithEmployees();
-        //console.log('✅ All leave requests loaded for admin:', requests.length);
       } else {
         const employeeId = user.employee_id || user.id;
-        //console.log('� Employee view: Loading leave requests for employee ID:', employeeId);
         requests = await leaveApi.getLeaveRequests(employeeId);
       }
-      
-      // Transform data to include employee_name (similar to timesheet approach)
       const transformedRequests = requests.map(request => ({
         ...request,
         employee_name: request.employees?.name || 
@@ -81,130 +69,157 @@ const Leave = () => {
                       request.employee_name ||
                       null
       }));
-      
-      //console.log('✅ Leave requests loaded:', transformedRequests);
       setLeaveRequests(transformedRequests || []);
     } catch (error) {
-      console.error('❌ Error loading leave requests:', error);
+      console.error('Error loading leave requests:', error);
       setLeaveRequests([]);
     }
   };
 
-  // Combined refresh function
   const refreshLeaveData = async () => {
     if (isAdmin) {
       await loadLeaveRequests();
     } else {
-      await Promise.all([
-        refreshBalance(),
-        loadLeaveRequests()
-      ]);
+      await Promise.all([refreshBalance(), loadLeaveRequests()]);
     }
   };
 
-  // Define leave type configurations with icons
+  const handleApproveRequest = async (id) => {
+    if (!id) return;
+    try {
+      setActionLoading(id);
+      setActionStatus(prev => ({ ...prev, [id]: 'approving' }));
+      const { leaveApi } = await import('../../utils/supabase');
+      await leaveApi.updateLeaveStatus(id, 'approved');
+      setActionStatus(prev => ({ ...prev, [id]: 'approved' }));
+      await refreshLeaveData();
+    } catch (err) {
+      console.error('Error approving leave:', err);
+      setActionStatus(prev => ({ ...prev, [id]: undefined }));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectRequest = async (id, defaultReason = 'Rejected by admin') => {
+    if (!id) return;
+    try {
+      setActionLoading(id);
+      setActionStatus(prev => ({ ...prev, [id]: 'rejecting' }));
+      const reason = window.prompt('Enter rejection reason (optional):', defaultReason) || defaultReason;
+      const { leaveApi } = await import('../../utils/supabase');
+      await leaveApi.updateLeaveStatus(id, 'rejected', reason);
+      setActionStatus(prev => ({ ...prev, [id]: 'rejected' }));
+      await refreshLeaveData();
+    } catch (err) {
+      console.error('Error rejecting leave:', err);
+      setActionStatus(prev => ({ ...prev, [id]: undefined }));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const leaveTypeConfigs = [
-    {
-      type: 'sick',
-      displayName: 'Sick Leave',
-      icon: HeartPulse,
-      iconClass: 'sick_leave_icon',
-      color: '#ef4444'
-    },
-    {
-      type: 'casual',
-      displayName: 'Casual Leave',
-      icon: Coffee,
-      iconClass: 'casual_leave_icon',
-      color: '#3b82f6'
-    },
-  
+    { type: 'sick', displayName: 'Sick Leave', icon: HeartPulse, iconClass: 'sick_leave_icon', color: '#ef4444', totalDays: 5 },
+    { type: 'casual', displayName: 'Casual Leave', icon: Coffee, iconClass: 'casual_leave_icon', color: '#3b82f6', totalDays: 12 },
   ];
 
-  // Calculate leave statistics from balance data
+  // FIXED: This function now properly calculates used days from approved requests
   const calculateLeaveStats = () => {
-    if (!leaveBalance) {
-      return leaveTypeConfigs.map(config => ({
-        ...config,
-        daysLeft: 0,
-        totalDays: 8, // Fixed allocation per leave type
-        usedDays: 0
+    if (!leaveRequests || leaveRequests.length === 0) {
+      return leaveTypeConfigs.map(config => ({ 
+        ...config, 
+        daysLeft: config.totalDays, 
+        totalDays: config.totalDays, 
+        usedDays: 0 
       }));
     }
 
+    const currentYear = new Date().getFullYear();
+
     return leaveTypeConfigs.map(config => {
-      // Each leave type has a fixed allocation of 8 days
-      const totalAllocated = 8;
+      const totalAllocated = config.totalDays;
       
-      // Get used days - calculate from approved leave requests for this type
+      // Calculate used days from APPROVED requests for current year
       const usedDaysFromRequests = leaveRequests
-        ? leaveRequests
-            .filter(req => 
-              req.leave_type === config.type && 
-              req.status === 'approved'
-            )
-            .reduce((sum, req) => {
-              const startDate = new Date(req.start_date);
-              const endDate = new Date(req.end_date);
-              const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-              return sum + duration;
-            }, 0)
-        : 0;
+        .filter(req => {
+          if (!req || !req.start_date || !req.leave_type) return false;
+          
+          const startDate = new Date(req.start_date);
+          const reqYear = startDate.getFullYear();
+          
+          // FIXED: Only count approved leaves for current year
+          return req.leave_type === config.type && 
+                 req.status === 'approved' && 
+                 reqYear === currentYear;
+        })
+        .reduce((sum, req) => {
+          const startDate = new Date(req.start_date);
+          const endDate = new Date(req.end_date);
+          // Calculate duration including both start and end dates
+          const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+          return sum + duration;
+        }, 0);
       
-      // Also check the balance table for used days (fallback)
-      const usedFromBalance = leaveBalance[`${config.type}_used`] || 0;
+      // Get used days from balance table (fallback)
+      const usedFromBalance = leaveBalance?.[`${config.type}_used`] || 0;
       
-      // Use the higher value (requests calculation is more accurate)
+      // Use the MAXIMUM to ensure accuracy (requests are source of truth)
       const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
-      
-      // Days left = total allocated - used
       const daysLeft = Math.max(0, totalAllocated - actualUsed);
       
-      return {
-        ...config,
+      console.log(`${config.type} Leave Calculation:`, {
+        usedFromRequests: usedDaysFromRequests,
+        usedFromBalance: usedFromBalance,
+        actualUsed: actualUsed,
         daysLeft: daysLeft,
-        totalDays: totalAllocated,
-        usedDays: actualUsed
+        totalAllocated: totalAllocated
+      });
+      
+      return { 
+        ...config, 
+        daysLeft, 
+        totalDays: totalAllocated, 
+        usedDays: actualUsed 
       };
     });
   };
 
-  // Calculate overall statistics
+  // FIXED: Calculate stats using the same logic
   const calculateStats = () => {
-    // Calculate total used days from approved leave requests (same logic as calculateLeaveStats)
+    if (!leaveRequests || leaveRequests.length === 0) {
+      return { totalDaysUsed: 0, pendingRequests: 0 };
+    }
+
+    const currentYear = new Date().getFullYear();
+    
     const totalUsed = leaveTypeConfigs.reduce((sum, config) => {
-      // Get used days from approved leave requests for this type
       const usedDaysFromRequests = leaveRequests
-        ? leaveRequests
-            .filter(req => 
-              req.leave_type === config.type && 
-              req.status === 'approved'
-            )
-            .reduce((reqSum, req) => {
-              const startDate = new Date(req.start_date);
-              const endDate = new Date(req.end_date);
-              const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-              return reqSum + duration;
-            }, 0)
-        : 0;
+        .filter(req => {
+          if (!req || !req.start_date || !req.leave_type) return false;
+          const startDate = new Date(req.start_date);
+          const reqYear = startDate.getFullYear();
+          return req.leave_type === config.type && 
+                 req.status === 'approved' && 
+                 reqYear === currentYear;
+        })
+        .reduce((reqSum, req) => {
+          const startDate = new Date(req.start_date);
+          const endDate = new Date(req.end_date);
+          const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+          return reqSum + duration;
+        }, 0);
       
-      // Also check the balance table for used days (fallback)
       const usedFromBalance = leaveBalance?.[`${config.type}_used`] || 0;
-      
-      // Use the higher value (requests calculation is more accurate)
       const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
-      
       return sum + actualUsed;
     }, 0);
 
-    const pendingCount = leaveRequests?.filter(req => 
+    const pendingCount = leaveRequests.filter(req => 
       req.status === 'pending' || !req.status
-    ).length || 0;
-
-    return {
-      totalDaysUsed: totalUsed,
-      pendingRequests: pendingCount
-    };
+    ).length;
+    
+    return { totalDaysUsed: totalUsed, pendingRequests: pendingCount };
   };
 
   const leaveTypes = isAdmin ? [] : calculateLeaveStats();
@@ -213,17 +228,9 @@ const Leave = () => {
   const handleLeaveSubmit = async (leaveData) => {
     try {
       setFormError('');
-      
-      // Add user information to leave data
-      const leaveRequestData = {
-        ...leaveData,
-        employee_id: user.employee_id || user.id,
-        user_id: user.id
-      };
-      
+      const leaveRequestData = { ...leaveData, employee_id: user.employee_id || user.id, user_id: user.id };
       await requestLeave(leaveRequestData);
       setShowLeaveForm(false);
-      // Refresh data to show new request
       await refreshLeaveData();
     } catch (error) {
       console.error('Leave submission error:', error);
@@ -231,24 +238,16 @@ const Leave = () => {
     }
   };
 
-  // Format leave requests for display
   const formatLeaveHistory = () => {
-    if (!leaveRequests || leaveRequests.length === 0) {
-      return [];
-    }
-
+    if (!leaveRequests || leaveRequests.length === 0) return [];
     return leaveRequests
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .map(request => {
         const startDate = new Date(request.start_date);
         const endDate = new Date(request.end_date);
         const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-        
         const config = leaveTypeConfigs.find(c => c.type === request.leave_type) || leaveTypeConfigs[0];
-
-        // Employee name for admin view (same approach as timesheet)
         const employeeName = request.employee_name || null;
-
         return {
           id: request.id,
           type: config.displayName,
@@ -268,54 +267,39 @@ const Leave = () => {
 
   const leaveHistory = formatLeaveHistory();
 
-  // Filter leave requests (similar to timesheet filtering)
-  const filteredLeaveHistory = leaveHistory.filter(leave => {
+  // Filter logic
+  const filteredLeaveHistory = leaveHistory.filter((leave) => {
     // Employee filter (admin only)
-    if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee) {
-      return false;
-    }
+    if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee) return false;
 
-    // Date range filter based on filter mode
+    const leaveStart = new Date(leave.raw_start_date);
+    const leaveEnd = new Date(leave.raw_end_date);
+
+    let filterStart = null;
+    let filterEnd = null;
+
     if (filters.filterMode === 'week') {
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const leaveDate = new Date(leave.raw_start_date);
-
-      if (leaveDate < weekAgo) {
-        return false;
-      }
+      filterStart = new Date();
+      filterStart.setDate(filterStart.getDate() - 7);
+      filterEnd = new Date();
     } else if (filters.filterMode === 'month') {
-      const monthAgo = new Date();
-      monthAgo.setDate(monthAgo.getDate() - 30);
-      const leaveDate = new Date(leave.raw_start_date);
-
-      if (leaveDate < monthAgo) {
-        return false;
-      }
+      filterStart = new Date();
+      filterStart.setDate(filterStart.getDate() - 30);
+      filterEnd = new Date();
+    } else if (filters.filterMode === 'custom') {
+      if (filters.startDate) filterStart = new Date(filters.startDate);
+      if (filters.endDate) filterEnd = new Date(filters.endDate);
     }
 
-    // Custom date range filter
-    if (filters.startDate || filters.endDate) {
-      const leaveDate = new Date(leave.raw_start_date);
-
-      if (filters.startDate && new Date(filters.startDate) > leaveDate) {
-        return false;
-      }
-
-      if (filters.endDate && new Date(filters.endDate) < leaveDate) {
-        return false;
-      }
+    if (filterStart && filterEnd) {
+      if (leaveEnd < filterStart || leaveStart > filterEnd) return false;
     }
 
     return true;
   });
 
   const handleFilterChange = (field, value) => {
-    //console.log('🔄 Filter change:', field, '=', value);
-    setFilters(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFilters(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -325,19 +309,6 @@ const Leave = () => {
         <div className="leave_title">
           <h1 className='bodyMediumText1'>Leave Requests</h1>
           <p className='bodyRegularText4'>Manage your team time off and leave applications</p>
-          {/* {error && (
-            <div style={{ 
-              color: '#dc2626', 
-              fontSize: '0.875rem', 
-              marginTop: '0.5rem',
-              padding: '0.5rem',
-              backgroundColor: '#fef2f2',
-              borderRadius: '0.375rem',
-              border: '1px solid #fecaca'
-            }}>
-              {error}
-            </div>
-          )} */}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
@@ -409,7 +380,7 @@ const Leave = () => {
                 overflow: 'hidden'
               }}>
                 <div style={{
-                  width: `${Math.min((leave.usedDays / 8) * 100, 100)}%`,
+                  width: `${Math.min((leave.usedDays / leave.totalDays) * 100, 100)}%`,
                   height: '100%',
                   backgroundColor: leave.color,
                   borderRadius: '2px',
@@ -455,6 +426,7 @@ const Leave = () => {
               {isAdmin ? 'All Employee Leave History' : 'Leave History'}
             </h2>
           </div>
+
           <div className="filter_section">
             <div className="filter_group">
               {/* Employee Filter - Admin Only */}
@@ -465,16 +437,12 @@ const Leave = () => {
                 >
                   <SelectTrigger 
                     className="bodyMediumText4"
-                    style={{
-                      minWidth: '180px',
-                      marginRight: '10px'
-                    }}
+                    style={{ minWidth: '180px', marginRight: '10px' }}
                   >
                     <SelectValue placeholder="All Employees" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Employees</SelectItem>
-                    {/* Get unique employee names from leave requests */}
                     {Array.from(new Set(leaveHistory.map(lh => lh.employeeName).filter(Boolean)))
                       .sort()
                       .map(employeeName => (
@@ -486,7 +454,7 @@ const Leave = () => {
                   </SelectContent>
                 </Select>
               )}
-              
+
               {/* Quick Filter Buttons */}
               <button  
                 className={`bodyMediumText4 filter_btn ${filters.filterMode === 'week' ? 'active' : ''}`}
@@ -521,7 +489,7 @@ const Leave = () => {
               >
                 All
               </button>
-              
+
               <button 
                 className={`calendar-trigger-btn ${calendarVisible ? 'active' : ''}`}
                 onClick={() => setCalendarVisible(!calendarVisible)}
@@ -529,8 +497,7 @@ const Leave = () => {
               >
                 <Calendar className="w-5 h-5 text-blue-500" />
               </button>
-              
-              {/* Custom Calendar - Show/Hide based on state */}
+
               {calendarVisible && (
                 <CustomCalendar
                   selectedRange={{
@@ -539,15 +506,12 @@ const Leave = () => {
                   }}
                   onDateRangeSelect={(range) => {
                     if (range?.from && range?.to) {
-                      // Convert dates to YYYY-MM-DD format
                       const startDate = range.from.toISOString().split('T')[0];
                       const endDate = range.to.toISOString().split('T')[0];
-                      
                       handleFilterChange('startDate', startDate);
                       handleFilterChange('endDate', endDate);
                       handleFilterChange('filterMode', 'custom');
                     } else if (!range?.from && !range?.to) {
-                      // Clear date filters
                       handleFilterChange('startDate', '');
                       handleFilterChange('endDate', '');
                       handleFilterChange('filterMode', 'all');
@@ -559,42 +523,34 @@ const Leave = () => {
             </div>
           </div>
         </div>
+
+        {/* Leave Entries */}
         {loading ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '2rem',
-            color: '#6b7280' 
-          }}>
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             Loading leave history...
           </div>
         ) : filteredLeaveHistory.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '2rem',
-            color: '#6b7280' 
-          }}>
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             {leaveHistory.length === 0
               ? (isAdmin ? "No employee leave requests have been submitted yet." : "No leave requests found. Click 'Request Leave' to submit your first request.")
-              : `No leave requests found for the selected ${filters.filterMode} filter.`
-            }
+              : `No leave requests found for the selected ${filters.filterMode} filter.`}
           </div>
         ) : (
           filteredLeaveHistory.map((leave) => (
             <div key={leave.id} className="leave_entry">
               <div className="leave_entry_header">
                 <div className="leave_info">
-                  <h3 className='bodyMediumText3' style={{margin:'0px !important' }}>{leave.type} • {leave.duration}</h3>
+                  <h3 className='bodyMediumText3' style={{ margin: '0px !important' }}>
+                    {leave.type} • {leave.duration}
+                  </h3>
                   {isAdmin && leave.employeeName && (
-                    <span className="employee_name bodyRegularText5" style={{ 
-                      color: '#666', 
-                      fontSize: '0.85rem',
-                      fontStyle: 'italic' 
-                    }}>
+                    <span className="employee_name bodyRegularText5" style={{ color: '#666', fontSize: '0.85rem', fontStyle: 'italic' }}>
                       by {leave.employeeName}
                     </span>
                   )}
                   <div className="leave_dates bodyRegularText5">{leave.dateRange}</div>
                   <div className="leave_reason bodyRegularText4">{leave.reason}</div>
+
                   {leave.rawData?.has_documentation && (
                     <div style={{
                       display: 'flex',
@@ -628,10 +584,10 @@ const Leave = () => {
                       )}
                     </div>
                   )}
-                  {/* <div className="leave_dates">{leave.dateRange}</div>
-                  <div className="leave_reason">{leave.reason}</div> */}
                 </div>
-                <div className="leave_status">
+
+                {/* Status + Admin Buttons */}
+                <div className="leave_status" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
                   <span className={`bodyMediumText4 status_badge ${
                     leave.status === 'approved' ? 'status_approved' : 
                     leave.status === 'rejected' ? 'status_rejected' : 
@@ -639,10 +595,28 @@ const Leave = () => {
                   }`}>
                     {leave.status?.charAt(0).toUpperCase() + leave.status?.slice(1) || 'Pending'}
                   </span>
-               
+
                   <span className="applied_date bodyRegularText5">
                     {leave.appliedDate}
                   </span>
+
+                  {/* Show Approve/Reject for Admin on Pending only */}
+                  {isAdmin && leave.status === 'pending' && (
+                    <div className="request-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <button
+                        className="approve-btn bodyMediumText5"
+                        onClick={() => handleApproveRequest(leave.id)}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="reject-btn bodyMediumText5"
+                        onClick={() => handleRejectRequest(leave.id, 'Rejected by admin')}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

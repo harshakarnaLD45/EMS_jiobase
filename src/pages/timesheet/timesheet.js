@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { Plus, Clock, Calendar, Eye, Edit2, Trash2, CheckCircle, TrendingUp, Clock4 } from 'lucide-react';
 import './timesheet.css';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -33,6 +33,8 @@ const Timesheet = () => {
     });
     const { user, isEmployee, isAdmin } = useAuth();
     const [employee, setEmployee] = useState(null);
+    const [actionLoading, setActionLoading] = useState(null);
+    const [actionStatus, setActionStatus] = useState({});
 
     // Load timesheets from database
     const loadTimesheets = async () => {
@@ -41,7 +43,6 @@ const Timesheet = () => {
             setError(null);
 
             if (!user) {
-                // console.log('⚠️ No user found, cannot load timesheets');
                 return;
             }
 
@@ -49,20 +50,14 @@ const Timesheet = () => {
 
             // Check if admin - load all timesheets, if employee - load only their timesheets
             if (isAdmin()) {
-                // console.log('👑 Admin view: Loading ALL employee timesheets');
                 timesheetData = await timesheetApi.getAllTimesheets();
-                // console.log('✅ All timesheets loaded for admin:', timesheetData.length);
             } else {
-                // console.log('👤 Employee view: Loading individual timesheets');
-                
                 // Get employee data first
                 let employeeData = null;
                 try {
                     employeeData = await employeeApi.getEmployeeByUser(user);
                     setEmployee(employeeData);
-                    // console.log('✅ Employee data loaded:', employeeData);
                 } catch (empError) {
-                    // console.log('⚠️ Could not load employee data:', empError.message);
                     // Continue with user ID if employee lookup fails
                 }
 
@@ -72,8 +67,6 @@ const Timesheet = () => {
                 if (!employeeId) {
                     throw new Error('Could not determine employee ID for timesheet lookup');
                 }
-
-                // console.log('🔍 Loading timesheets for employee ID:', employeeId);
 
                 // Load timesheets using the API
                 timesheetData = await timesheetApi.getTimesheetsByEmployeeId(employeeId);
@@ -100,7 +93,6 @@ const Timesheet = () => {
                         }));
                     }
                 } catch (error) {
-                    // console.log('⚠️ Error parsing tasks for timesheet:', timesheet.id, error.message);
                     parsedTasks = [];
                 }
 
@@ -125,9 +117,6 @@ const Timesheet = () => {
 
             setTimesheets(transformedTimesheets);
             calculateStats(transformedTimesheets);
-
-            // console.log('✅ Timesheets loaded successfully:', transformedTimesheets.length);
-            // console.log('📋 Sample timesheet data:', transformedTimesheets[0]);
 
         } catch (error) {
             console.error('❌ Error loading timesheets:', error);
@@ -192,6 +181,104 @@ const Timesheet = () => {
         };
     }, [calendarVisible]);
 
+    // Handle approve timesheet
+    const handleApproveTimesheet = async (timesheetId) => {
+        if (!timesheetId) return;
+        
+        try {
+            setActionLoading(timesheetId);
+            setActionStatus(prev => ({ ...prev, [timesheetId]: 'approving' }));
+
+            const { supabase } = await import('../../utils/supabase');
+            const { error } = await supabase
+                .from('timesheets')
+                .update({ status: 'approved' })
+                .eq('id', timesheetId);
+
+            if (error) throw error;
+
+            setActionStatus(prev => ({ ...prev, [timesheetId]: 'approved' }));
+            
+            // Refresh data after a short delay
+            setTimeout(() => {
+                loadTimesheets();
+            }, 1000);
+
+            // Clean up status after delay
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[timesheetId];
+                    return newStatus;
+                });
+            }, 3000);
+
+        } catch (error) {
+            console.error('Error approving timesheet:', error);
+            setActionStatus(prev => ({ ...prev, [timesheetId]: 'error' }));
+            
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[timesheetId];
+                    return newStatus;
+                });
+            }, 3000);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    // Handle reject timesheet
+    const handleRejectTimesheet = async (timesheetId) => {
+        if (!timesheetId) return;
+        
+        const reason = window.prompt('Enter rejection reason (optional):', 'Rejected by admin');
+        if (reason === null) return; // User cancelled
+        
+        try {
+            setActionLoading(timesheetId);
+            setActionStatus(prev => ({ ...prev, [timesheetId]: 'rejecting' }));
+
+            const { supabase } = await import('../../utils/supabase');
+            const { error } = await supabase
+                .from('timesheets')
+                .update({ status: 'rejected' })
+                .eq('id', timesheetId);
+
+            if (error) throw error;
+
+            setActionStatus(prev => ({ ...prev, [timesheetId]: 'rejected' }));
+            
+            // Refresh data after a short delay
+            setTimeout(() => {
+                loadTimesheets();
+            }, 1000);
+
+            // Clean up status after delay
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[timesheetId];
+                    return newStatus;
+                });
+            }, 3000);
+
+        } catch (error) {
+            console.error('Error rejecting timesheet:', error);
+            setActionStatus(prev => ({ ...prev, [timesheetId]: 'error' }));
+            
+            setTimeout(() => {
+                setActionStatus(prev => {
+                    const newStatus = { ...prev };
+                    delete newStatus[timesheetId];
+                    return newStatus;
+                });
+            }, 3000);
+        } finally {
+            setActionLoading(null);
+        }
+    };
 
     const StatusBadge = ({ status }) => {
         const getStatusStyles = () => {
@@ -199,7 +286,10 @@ const Timesheet = () => {
                 case 'approved':
                     return 'status_approved';
                 case 'submitted':
+                case 'pending':
                     return 'status_submitted';
+                case 'rejected':
+                    return 'status_rejected';
                 case 'draft':
                     return 'status_draft';
                 default:
@@ -226,6 +316,7 @@ const Timesheet = () => {
                     </div>
                 );
             case 'submitted':
+            case 'pending':
                 return (
                     <>
                         <div className="tooltip">
@@ -234,12 +325,6 @@ const Timesheet = () => {
                             </button>
                             <span className="tooltip_text">View Details</span>
                         </div>
-                        {/* <div className="tooltip">
-                            <button className="action_icon">
-                                <Edit2 size={16} />
-                            </button>
-                            <span className="tooltip_text">Retract & Edit</span>
-                        </div> */}
                     </>
                 );
             case 'draft':
@@ -267,69 +352,94 @@ const Timesheet = () => {
 
     const todayTimesheet = timesheets.find(t => t.date === today);
 
-    const filteredTimesheets = timesheets.filter(timesheet => {
-        // Status filter
-        if (filters.status !== 'all' && timesheet.status !== filters.status) {
-            return false;
-        }
-
-        // Employee filter (admin only)
-        if (isAdmin() && filters.employee !== 'all' && timesheet.employee_name !== filters.employee) {
-            return false;
-        }
-
-        // Date range filter based on filter mode
-        if (filters.filterMode === 'week') {
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            const timesheetDate = new Date(timesheet.raw_date || timesheet.date);
-
-            if (timesheetDate < weekAgo) {
-                return false;
-            }
-        } else if (filters.filterMode === 'month') {
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            const timesheetDate = new Date(timesheet.raw_date || timesheet.date);
-
-            if (timesheetDate < monthAgo) {
-                return false;
-            }
-        }
-        // Custom date range filter
-        if (filters.startDate || filters.endDate) {
-            const timesheetDate = new Date(timesheet.raw_date || timesheet.date);
-
-            if (filters.startDate && new Date(filters.startDate) > timesheetDate) {
+    // Filter timesheets with proper date comparison
+    const getFilteredTimesheets = () => {
+        return timesheets.filter(timesheet => {
+            // Status filter
+            if (filters.status !== 'all' && timesheet.status !== filters.status) {
                 return false;
             }
 
-            if (filters.endDate && new Date(filters.endDate) < timesheetDate) {
+            // Employee filter (admin only)
+            if (isAdmin() && filters.employee !== 'all' && timesheet.employee_name !== filters.employee) {
                 return false;
             }
-        }
 
-        // Search filter
-        if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
-            const hasMatchingTask = timesheet.tasks && timesheet.tasks.some(task =>
-                (task.description && task.description.toLowerCase().includes(searchLower)) ||
-                (task.taskTitle && task.taskTitle.toLowerCase().includes(searchLower))
-            );
-            const matchesNote = timesheet.note &&
-                timesheet.note.toLowerCase().includes(searchLower);
-
-            if (!hasMatchingTask && !matchesNote) {
-                return false;
+            // Get timesheet date and normalize it
+            if (!timesheet.raw_date) return true;
+            
+            let timesheetDate;
+            if (timesheet.raw_date.includes('T')) {
+                timesheetDate = new Date(timesheet.raw_date);
+            } else {
+                timesheetDate = new Date(timesheet.raw_date + 'T00:00:00');
             }
-        }
+            
+            // Date range filter based on filter mode
+            if (filters.filterMode === 'week') {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - now.getDay());
+                
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
 
-        return true;
-    });
+                if (timesheetDate < weekStart || timesheetDate > weekEnd) {
+                    return false;
+                }
+            } else if (filters.filterMode === 'month') {
+                const now = new Date();
+                
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                monthStart.setHours(0, 0, 0, 0);
+                
+                const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                monthEnd.setHours(23, 59, 59, 999);
+
+                if (timesheetDate < monthStart || timesheetDate > monthEnd) {
+                    return false;
+                }
+            } else if (filters.filterMode === 'custom' && (filters.startDate || filters.endDate)) {
+                if (filters.startDate) {
+                    const startDate = new Date(filters.startDate + 'T00:00:00');
+                    if (timesheetDate < startDate) {
+                        return false;
+                    }
+                }
+
+                if (filters.endDate) {
+                    const endDate = new Date(filters.endDate + 'T23:59:59');
+                    if (timesheetDate > endDate) {
+                        return false;
+                    }
+                }
+            }
+
+            // Search filter
+            if (filters.search) {
+                const searchLower = filters.search.toLowerCase();
+                const hasMatchingTask = timesheet.tasks && timesheet.tasks.some(task =>
+                    (task.description && task.description.toLowerCase().includes(searchLower)) ||
+                    (task.taskTitle && task.taskTitle.toLowerCase().includes(searchLower))
+                );
+                const matchesNote = timesheet.note &&
+                    timesheet.note.toLowerCase().includes(searchLower);
+
+                if (!hasMatchingTask && !matchesNote) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    };
+
+    const filteredTimesheets = getFilteredTimesheets();
 
     const handleFilterChange = (field, value) => {
-        console.log('🔄 Filter change:', field, '=', value);
-
         setFilters(prev => ({
             ...prev,
             [field]: value
@@ -364,7 +474,6 @@ const Timesheet = () => {
                                 <TimesheetForm
                                     onClose={() => setTimesheetDialogOpen(false)}
                                     onSubmit={(newTimesheet) => {
-                                        // Reload timesheets from database to get latest data
                                         loadTimesheets();
                                         setTimesheetDialogOpen(false);
                                     }}
@@ -373,9 +482,8 @@ const Timesheet = () => {
                         </Dialog.Portal>
                     </Dialog.Root>
                 </div>)}
-
-
             </div>
+
             {/* Loading State */}
             {loading && (
                 <div className="loading-state" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -397,18 +505,23 @@ const Timesheet = () => {
                 </div>
             )}
 
-            {/* Stats - Show only to employees */}
-            {!loading && !error && isEmployee() && (
+            {/* Stats - Show for employees and admin */}
+            {!loading && !error && (isEmployee() || isAdmin()) && (
                 <div className="timesheet_stats">
-                    <div className="stat_card">
-                        <div>
-                            <div className="stat_label bodyRegularText4">Today's Hours</div>
-                            <div className="stat_value bodyMediumText2 ">{stats.todayHours}</div>
+                    {/* Today's Hours - show ONLY for employees */}
+                    {isEmployee() && (
+                        <div className="stat_card">
+                            <div>
+                                <div className="stat_label bodyRegularText4">Today's Hours</div>
+                                <div className="stat_value bodyMediumText2">{stats.todayHours}</div>
+                            </div>
+                            <div className="stat_icon">
+                                <Clock className="time_card_icons w-5 h-5 text-blue-500" />
+                            </div>
                         </div>
-                        <div className="stat_icon"><Clock className="time_card_icons w-5 h-5 text-blue-500" /></div>
-                    </div>
+                    )}
 
-
+                    {/* Approved - show for both admin & employee */}
                     <div className="stat_card">
                         <div>
                             <div className="stat_label bodyRegularText4">Approved</div>
@@ -419,6 +532,7 @@ const Timesheet = () => {
                         </div>
                     </div>
 
+                    {/* Pending - show for both admin & employee */}
                     <div className="stat_card">
                         <div>
                             <div className="stat_label bodyRegularText4">Pending</div>
@@ -459,7 +573,6 @@ const Timesheet = () => {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Employees</SelectItem>
-                                        {/* Get unique employee names from timesheets */}
                                         {Array.from(new Set(timesheets.map(ts => ts.employee_name).filter(Boolean)))
                                             .sort()
                                             .map(employeeName => (
@@ -515,7 +628,6 @@ const Timesheet = () => {
                                 <Calendar className="w-5 h-5 text-blue-500" />
                             </button>
                             
-                            {/* Custom Calendar - Show/Hide based on state */}
                             {calendarVisible && (
                                 <CustomCalendar
                                     selectedRange={{
@@ -524,7 +636,6 @@ const Timesheet = () => {
                                     }}
                                     onDateRangeSelect={(range) => {
                                         if (range?.from && range?.to) {
-                                            // Convert dates to YYYY-MM-DD format
                                             const startDate = range.from.toISOString().split('T')[0];
                                             const endDate = range.to.toISOString().split('T')[0];
                                             
@@ -532,7 +643,6 @@ const Timesheet = () => {
                                             handleFilterChange('endDate', endDate);
                                             handleFilterChange('filterMode', 'custom');
                                         } else if (!range?.from && !range?.to) {
-                                            // Clear date filters
                                             handleFilterChange('startDate', '');
                                             handleFilterChange('endDate', '');
                                             handleFilterChange('filterMode', 'all');
@@ -562,7 +672,6 @@ const Timesheet = () => {
                                 : `No timesheets found for the selected ${filters.filterMode} filter.`
                             }
                         </p>
-
                     </div>
                 )}
 
@@ -584,14 +693,51 @@ const Timesheet = () => {
                             </div>
                             <div className="entry_status bodyMediumText3">
                                 <StatusBadge status={timesheet.status} />
-                                <div className="entry_actions">
-                                    {getEntryActions(timesheet.status)}
-                                </div>
+                                
+                                {/* Show view actions for employees, or approve/reject for admin on pending */}
+                                {!isAdmin() && (
+                                    <div className="entry_actions">
+                                        {getEntryActions(timesheet.status)}
+                                    </div>
+                                )}
+                                
+                                {/* Admin: Show Approve/Reject buttons for pending/submitted timesheets */}
+                                {isAdmin() && (timesheet.status === 'pending' || timesheet.status === 'submitted') && (
+                                    <div className="request-actions" style={{ 
+                                        display: 'flex', 
+                                        gap: '0.5rem', 
+                                        marginLeft: '0.5rem' 
+                                    }}>
+                                        <button
+                                            className={`approve-btn bodyMediumText5 ${
+                                                actionStatus[timesheet.id] === 'approved' ? 'success' : 
+                                                actionStatus[timesheet.id] === 'approving' ? 'processing' : ''
+                                            }`}
+                                            onClick={() => handleApproveTimesheet(timesheet.id)}
+                                            disabled={actionLoading === timesheet.id || 
+                                                     ['approved', 'rejected'].includes(actionStatus[timesheet.id])}
+                                        >
+                                            {actionStatus[timesheet.id] === 'approving' ? 'Approving...' : 
+                                             actionStatus[timesheet.id] === 'approved' ? 'Approved ✓' : 'Approve'}
+                                        </button>
+                                        <button
+                                            className={`reject-btn bodyMediumText5 ${
+                                                actionStatus[timesheet.id] === 'rejected' ? 'success' : 
+                                                actionStatus[timesheet.id] === 'rejecting' ? 'processing' : ''
+                                            }`}
+                                            onClick={() => handleRejectTimesheet(timesheet.id)}
+                                            disabled={actionLoading === timesheet.id || 
+                                                     ['approved', 'rejected'].includes(actionStatus[timesheet.id])}
+                                        >
+                                            {actionStatus[timesheet.id] === 'rejecting' ? 'Rejecting...' : 
+                                             actionStatus[timesheet.id] === 'rejected' ? 'Rejected ✗' : 'Reject'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="entry_details" style={{ margin: '0' }}>
                             <span className='bodyRegularText4'>Hours: {timesheet.hours}</span>
-
                         </div>
 
                         {timesheet.tasks && timesheet.tasks.length > 0 && (
@@ -623,11 +769,10 @@ const Timesheet = () => {
                                 Note: {timesheet.note}
                             </div>
                         )}
-
                     </div>
                 ))}
             </div>
-        </div >
+        </div>
     );
 };
 

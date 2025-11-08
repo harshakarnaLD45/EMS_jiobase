@@ -5,8 +5,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { adminApi, employeeApi, timesheetApi, leaveApi } from '../../utils/supabase';
 import './Dashboard.css';
 import { TimesheetForm, LeaveRequestForm } from '../../components';
+import '../../components/common/calender/CustomCalendar.css';
+import CustomCalendar from '../../components/common/calender/CustomCalendar';
+import { StatusIndicator } from '../../components/common/StatusIndicator/Status_Indicator';
+
+
 
 const Dashboard = () => {
+  const [isOnline, setIsOnline] = useState(true);
   const [timesheetDialogOpen, setTimesheetDialogOpen] = useState(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [stats, setStats] = useState({});
@@ -14,6 +20,20 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { user, isAdmin } = useAuth();
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [hasSubmittedToday, setHasSubmittedToday] = useState(false); // NEW: Track if submitted today
+  const [filters, setFilters] = useState({
+    filterMode: 'all', // 'all', 'week', 'month', or 'custom'
+    startDate: '',
+    endDate: ''
+  });
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -64,12 +84,12 @@ const Dashboard = () => {
         const timesheets = await timesheetApi.getTimesheetsByEmployeeId(user.employee_id || user.id);
         const recentTimesheetData = timesheets.slice(0, 3).map(timesheet => ({
           id: timesheet.id,
-          date: new Date(timesheet.date).toLocaleDateString('en-US', {
+          date: new Date(timesheet.date || timesheet.workDate).toLocaleDateString('en-US', {
             weekday: 'short',
             month: 'short',
             day: 'numeric'
           }),
-          hours: `${timesheet.hours || 0} hours`,
+          hours: `${timesheet.hours || timesheet.hoursWorked || 0} hours`,
           status: timesheet.status || 'pending'
         }));
         setRecentTimesheets(recentTimesheetData);
@@ -83,42 +103,72 @@ const Dashboard = () => {
         } catch (leaveError) {
           //console.log('⚠️ No leave balance found, using defaults');
         }
-
-        // Calculate employee stats - ONLY COUNT APPROVED TIMESHEETS
-        const todayTimesheets = timesheets.filter(t =>
-          new Date(t.date).toDateString() === new Date().toDateString()
-        );
+         
+        // FIX 1: Check if employee has submitted today and calculate today's hours
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset to start of day
         
-        // Calculate today's total hours (all timesheets) and track status
+        const todayTimesheets = timesheets.filter(t => {
+          const timesheetDate = new Date(t.workDate || t.date);
+          timesheetDate.setHours(0, 0, 0, 0); // Reset to start of day
+          return timesheetDate.getTime() === today.getTime();
+        });
+        
+        // Set the flag if there are any timesheets for today
+        setHasSubmittedToday(todayTimesheets.length > 0);
+
+        // Calculate today's total hours (sum all entries for today)
         const todayApprovedTimesheets = todayTimesheets.filter(t => t.status === 'approved');
         const todayPendingTimesheets = todayTimesheets.filter(t => t.status !== 'approved');
         
-        // Show total hours for today (all timesheets regardless of status)
-        const todayTotalHours = todayTimesheets.reduce((sum, t) => sum + (t.hours || 0), 0);
+        // Show total hours for today - use the correct field name
+        const todayTotalHours = todayTimesheets.reduce((sum, t) => {
+          const hours = parseFloat(t.hoursWorked || t.hours || 0);
+          console.log('Today timesheet:', { date: t.workDate || t.date, hours, status: t.status });
+          return sum + hours;
+        }, 0);
+        
+        console.log('Today total hours:', todayTotalHours, 'from', todayTimesheets.length, 'timesheets');
+
         
         // Check if there are pending timesheets today to show status
-        const todayStatus = todayPendingTimesheets.length > 0 ? todayPendingTimesheets[0].status : null;
+        const todayStatus =
+          todayPendingTimesheets.length > 0
+            ? todayPendingTimesheets[0].status
+            : todayApprovedTimesheets.length > 0
+            ? 'approved'
+            : null;
 
         const thisWeekStart = new Date();
         thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
-        const weeklyApprovedTimesheets = timesheets.filter(t => 
-          new Date(t.date) >= thisWeekStart && t.status === 'approved'
-        );
-        const weeklyHours = weeklyApprovedTimesheets.reduce((sum, t) => sum + (t.hours || 0), 0);
+        thisWeekStart.setHours(0, 0, 0, 0);
+        
+        const weeklyHours = timesheets
+          .filter(t => {
+            const timesheetDate = new Date(t.date || t.workDate);
+            return timesheetDate >= thisWeekStart;
+          })
+          .reduce((sum, t) => sum + parseFloat(t.hoursWorked || t.hours || 0), 0);
 
+        // MONTHLY HOURS (include all statuses)
         const thisMonthStart = new Date();
         thisMonthStart.setDate(1);
-        const monthlyApprovedTimesheets = timesheets.filter(t => 
-          new Date(t.date) >= thisMonthStart && t.status === 'approved'
-        );
-        const monthlyHours = monthlyApprovedTimesheets.reduce((sum, t) => sum + (t.hours || 0), 0);
+        thisMonthStart.setHours(0, 0, 0, 0);
+        
+        const monthlyHours = timesheets
+          .filter(t => {
+            const timesheetDate = new Date(t.date || t.workDate);
+            return timesheetDate >= thisMonthStart;
+          })
+          .reduce((sum, t) => sum + parseFloat(t.hoursWorked || t.hours || 0), 0);
 
+        // ✅ Update the dashboard stats
         setStats({
-          todayHours: `${todayTotalHours}h`,
+          todayHours: Number(todayTotalHours.toFixed(1)),
           todayStatus: todayStatus,
-          weeklyProgress: `${weeklyHours}h`,
-          leaveBalance: leaveBalance.sick_leave + leaveBalance.casual_leave,
-          monthlyHours: `${monthlyHours}h`,
+          weeklyProgress: `${weeklyHours.toFixed(1)}h`,
+          leaveBalance: (leaveBalance.sick_leave || 0) + (leaveBalance.casual_leave || 0),
+          monthlyHours: `${monthlyHours.toFixed(1)}h`,
           sickLeave: leaveBalance.sick_leave || 0,
           casualLeave: leaveBalance.casual_leave || 0
         });
@@ -139,7 +189,7 @@ const Dashboard = () => {
         });
       } else {
         setStats({
-          todayHours: "0h",
+          todayHours: 0,
           todayStatus: null,
           weeklyProgress: "0h",
           leaveBalance: 0,
@@ -147,6 +197,7 @@ const Dashboard = () => {
           sickLeave: 0,
           casualLeave: 0
         });
+        setHasSubmittedToday(false);
       }
     } finally {
       setLoading(false);
@@ -184,9 +235,10 @@ const Dashboard = () => {
       <div className="good_greeting_container">
         <div className="good_greeting_section">
           <div>
-            <h1 className="good_greeting bodyMediumText2">
-              {getGreeting()}, {user?.name?.split(' ')[0] || 'User'}!
-            </h1>
+           <h1 className="good_greeting bodyMediumText2">
+           {getGreeting()}, {user?.name?.split(' ')[0] || 'User'}!
+</h1>
+
             <p className="text-text-secondary bodyRegularText4">
               
                  Here's your activity summary for today
@@ -211,9 +263,18 @@ const Dashboard = () => {
             {!isAdmin() && (
               <Dialog.Root open={timesheetDialogOpen} onOpenChange={setTimesheetDialogOpen}>
                 <Dialog.Trigger asChild>
-                  <button className="quick-action-btn primary bodyMediumText3">
+                  {/* FIX 2: Disable button if already submitted today */}
+                  <button 
+                    className="quick-action-btn primary bodyMediumText3"
+                    disabled={hasSubmittedToday}
+                    style={{
+                      opacity: hasSubmittedToday ? 0.5 : 1,
+                      cursor: hasSubmittedToday ? 'not-allowed' : 'pointer'
+                    }}
+                    title={hasSubmittedToday ? 'You have already logged work hours for today' : 'Log Work Hours'}
+                  >
                     <Plus className="w-4 h-4" />
-                    Log Hours
+                    {hasSubmittedToday ? 'Work Hours Logged' : 'Log Work Hours'}
                   </button>
                 </Dialog.Trigger>
                 <Dialog.Portal>
@@ -222,7 +283,8 @@ const Dashboard = () => {
                     <TimesheetForm
                       onClose={() => setTimesheetDialogOpen(false)}
                       onSubmit={(newTimesheet) => {
-                        // Refresh dashboard data after adding timesheet
+                        // FIX 3: Reload dashboard data immediately after submission
+                        setTimesheetDialogOpen(false);
                         loadDashboardData();
                       }}
                     />
@@ -266,22 +328,33 @@ const Dashboard = () => {
                   <span className="stats_title bodyMediumText3">Today's Hours</span>
                   <Clock className="progress_icons Clock" />
                 </div>
-                <div className="stats_hrs bodyMediumText1">
-                  {stats.todayHours}
-                  {stats.todayStatus && (
-                    <span className={` ml-2`} style={{ fontSize: '12px',  padding: '2px 8px', borderRadius: '12px' }}>
-                      <span style={{ 
-                        backgroundColor: stats.todayStatus === "approved" ? "#093c1dff" : "#db712fff", 
-                        width: '6px', 
-                        height: '6px', 
-                        borderRadius: '50%', 
-                        display: 'inline-flex', 
-                        marginRight: '4px' 
-                      }} />
-                      {stats.todayStatus}
-                    </span>
-                  )}
-                </div>
+              <div className="stats_hrs bodyMediumText1">
+  {stats.todayHours ? `${Number(stats.todayHours).toFixed(1)}h` : '0h'}
+{stats.todayStatus && (
+    <span
+      className="ml-2"
+      style={{
+        fontSize: '12px',
+        padding: '2px 8px',
+        borderRadius: '12px',
+      }}
+    >
+      <span
+        style={{
+          backgroundColor:
+            stats.todayStatus === "approved" ? "#093c1dff" : "#db712fff",
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          display: 'inline-flex',
+          marginRight: '4px',
+        }}
+      />
+      {stats.todayStatus}
+    </span>
+  )}
+</div>
+
                 {/* <div className="bodyRegularText5 text-text-secondary mt-1">
                   Today's timesheet
                 </div> */}
@@ -321,10 +394,82 @@ const Dashboard = () => {
         
       </div>
 
+             <div className="filter_section" style={{ marginTop: '1.5rem' }}>
+        <div className="filter_group">
+          <button
+            className={`bodyMediumText4 filter_btn ${filters.filterMode === 'week' ? 'active' : ''}`}
+            onClick={() => {
+              handleFilterChange('filterMode', 'week');
+              handleFilterChange('startDate', '');
+              handleFilterChange('endDate', '');
+              setCalendarVisible(false);
+            }}
+          >
+            Week
+          </button>
+
+          <button
+            className={`bodyMediumText4 filter_btn ${filters.filterMode === 'month' ? 'active' : ''}`}
+            onClick={() => {
+              handleFilterChange('filterMode', 'month');
+              handleFilterChange('startDate', '');
+              handleFilterChange('endDate', '');
+              setCalendarVisible(false);
+            }}
+          >
+            Month
+          </button>
+
+          <button
+            className={`bodyMediumText4 filter_btn ${filters.filterMode === 'all' ? 'active' : ''}`}
+            onClick={() => {
+              handleFilterChange('filterMode', 'all');
+              handleFilterChange('startDate', '');
+              handleFilterChange('endDate', '');
+              setCalendarVisible(false);
+            }}
+          >
+            All
+          </button>
+
+          <button
+            className={`calendar-trigger-btn ${calendarVisible ? 'active' : ''}`}
+            onClick={() => setCalendarVisible(!calendarVisible)}
+            title="Custom Date Range"
+          >
+            <Calendar className="w-5 h-5 text-blue-500" />
+          </button>
+
+          {calendarVisible && (
+            <CustomCalendar
+              selectedRange={{
+                from: filters.startDate ? new Date(filters.startDate) : null,
+                to: filters.endDate ? new Date(filters.endDate) : null
+              }}
+              onDateRangeSelect={(range) => {
+                if (range?.from && range?.to) {
+                  const startDate = range.from.toISOString().split('T')[0];
+                  const endDate = range.to.toISOString().split('T')[0];
+
+                  handleFilterChange('startDate', startDate);
+                  handleFilterChange('endDate', endDate);
+                  handleFilterChange('filterMode', 'custom');
+                } else if (!range?.from && !range?.to) {
+                  handleFilterChange('startDate', '');
+                  handleFilterChange('endDate', '');
+                  handleFilterChange('filterMode', 'all');
+                }
+              }}
+              onClose={() => setCalendarVisible(false)}
+            />
+          )}
+        </div>
+      </div>
+
       {/* Recent Timesheets and Quick Actions */}
-      <div className="content-grid gap-6">
-        <div className="recent-timesheets stats-card">
-          <div className=" recent-timesheets-card ">
+      <div className="content-grid gap-6 w-full max-w-full">
+        <div className="recent-timesheets stats-card w-full">
+          <div className=" recent-timesheets-card w-full ">
             <h2 className=" bodyMediumText2">Recent Timesheets</h2>
             <div className="timesheets_lists">
               {recentTimesheets.map((timesheet) => (
@@ -355,13 +500,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="quick_actions stats-card">
-          <div className="">
-            <h2 className="bodyMediumText2">Quick Actions</h2>
-           
-
-          </div>
-        </div>
+        
       </div>
     </div>
   );

@@ -72,25 +72,28 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
       for (let i = 0; i < 7; i++) {
         const cloneDay = day;
         const isCurrentMonth = isSameMonth(day, monthStart);
-        const isSelected = dateRange.from && isSameDay(day, dateRange.from) ||
-                          dateRange.to && isSameDay(day, dateRange.to);
-        const isInRange = dateRange.from && dateRange.to &&
-                         day >= dateRange.from && day <= dateRange.to;
+        const isSelected = (dateRange.from && isSameDay(day, dateRange.from)) ||
+                           (dateRange.to && isSameDay(day, dateRange.to));
+        const isInRange = dateRange.from && dateRange.to && day >= dateRange.from && day <= dateRange.to;
         const isToday = isSameDay(day, new Date());
+        const isSunday = day.getDay() === 0; // Disable Sundays
 
         days.push(
           <div
             key={day}
             className={`calendar-cell ${
               !isCurrentMonth ? 'calendar-cell-disabled' : ''
-            } ${isSelected ? 'calendar-cell-selected' : ''} ${
-              isInRange ? 'calendar-cell-in-range' : ''
-            } ${isToday ? 'calendar-cell-today' : ''}`}
-            onClick={() => isCurrentMonth && handleDateClick(cloneDay)}
+            } ${isSunday ? 'calendar-cell-disabled' : ''} ${
+              isSelected ? 'calendar-cell-selected' : ''
+            } ${isInRange ? 'calendar-cell-in-range' : ''} ${
+              isToday ? 'calendar-cell-today' : ''
+            }`}
+            onClick={() => isCurrentMonth && !isSunday && handleDateClick(cloneDay)}
           >
             <span className="calendar-cell-text">{format(day, 'd')}</span>
           </div>
         );
+
         day = addDays(day, 1);
       }
       rows.push(
@@ -100,6 +103,7 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
       );
       days = [];
     }
+
     return <div className="calendar-body">{rows}</div>;
   };
 
@@ -119,6 +123,21 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
     }
   };
 
+  // Calculate total leave days excluding Sundays
+  const totalDaysExcludingSundays = (() => {
+    if (!dateRange.from || !dateRange.to) return 0;
+    let count = 0;
+    let current = new Date(dateRange.from);
+    const end = new Date(dateRange.to);
+
+    while (current <= end) {
+      if (current.getDay() !== 0) count++; // Skip Sundays
+      current.setDate(current.getDate() + 1);
+    }
+
+    return count;
+  })();
+
   return (
     <div className="custom-calendar">
       <div className="calendar-container">
@@ -131,7 +150,7 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
             <div className="selected-range">
               <strong>Selected:</strong> {format(dateRange.from, 'MMM dd')} - {format(dateRange.to, 'MMM dd, yyyy')}
               <span className="range-days">
-                ({Math.ceil((dateRange.to - dateRange.from) / (1000 * 60 * 60 * 24)) + 1} days)
+                ({totalDaysExcludingSundays} days excluding Sundays)
               </span>
             </div>
             <div className="calendar-actions">

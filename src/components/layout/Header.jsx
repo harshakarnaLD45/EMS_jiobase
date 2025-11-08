@@ -1,8 +1,45 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Clock, Menu } from 'lucide-react';
+import { StatusIndicator } from '../../components/common/StatusIndicator/Status_Indicator';
 
-const Header = ({ onMenuClick }) => {
-  // Add responsive styles for mobile menu button and padding
+const Header = ({ onMenuClick, user }) => {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isActive, setIsActive] = useState(true);
+
+  // Track browser online/offline
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Track user activity (idle detection)
+  useEffect(() => {
+    let idleTimer;
+
+    const resetTimer = () => {
+      setIsActive(true);
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => setIsActive(false), 300000); // 5 minutes idle
+    };
+
+    const events = ['mousemove', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+
+    resetTimer(); // initialize
+
+    return () => {
+      clearTimeout(idleTimer);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, []);
+
+  // Your existing responsive styles
   useEffect(() => {
     const styleElement = document.createElement('style');
     styleElement.textContent = `
@@ -31,6 +68,7 @@ const Header = ({ onMenuClick }) => {
       }
     };
   }, []);
+
   return (
     <header
       role="banner"
@@ -55,7 +93,8 @@ const Header = ({ onMenuClick }) => {
           alignItems: 'center', 
           justifyContent: 'space-between', 
           borderBottom: '1px solid rgba(229, 231, 235, 0.8)' 
-        }}>
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button
             onClick={onMenuClick}
@@ -75,8 +114,11 @@ const Header = ({ onMenuClick }) => {
           >
             <Menu style={{ width: '24px', height: '24px', color: '#6b7280' }} />
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} className="bodyRegularText4">Welcome back
-            {/* <span className="text-lg text-gray-800 font-bold">John</span> */}
+
+          {/* Welcome back + StatusIndicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="bodyRegularText4">
+            Welcome back 
+            <StatusIndicator isOnline={isOnline && isActive} />
           </div>
         </div>
       </div>

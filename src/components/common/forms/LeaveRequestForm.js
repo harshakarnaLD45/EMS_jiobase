@@ -4,6 +4,9 @@ import { useLeave } from '../../../contexts/LeaveContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Input, InputAdornment } from '@mui/material';
 import { leaveApi } from '../../../utils/supabase';
+import { Calendar as CalendarIcon } from 'lucide-react';
+import CustomCalendar from '../../../components/common/calender/CustomCalendar';
+
 
 const styles = {
   container: {
@@ -182,14 +185,14 @@ const LeaveRequestForm = ({ onClose }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     leaveType: '',
-    startDate: '',
-    endDate: '',
+    selectedDate: '',
     subject: '',
     reason: ''
   });
   const [documentFile, setDocumentFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
   const [activeLeaveCheck, setActiveLeaveCheck] = useState({ 
     isChecking: false, 
     hasActiveLeave: false, 
@@ -197,6 +200,8 @@ const LeaveRequestForm = ({ onClose }) => {
     checked: false
   });
   const { leaveBalance, loading, error, requestLeave } = useLeave();
+
+
 
   // Get leave types with actual balance from Supabase
   const leaveTypes = leaveBalance ? [
@@ -558,47 +563,32 @@ const LeaveRequestForm = ({ onClose }) => {
         </div>
 
         {/* Date Range */}
-        <div style={styles.dateGrid}>
-          <div style={styles.formGroup}>
-            <label  className='bodyMediumText5' style={styles.label}>
-              Start Date <span style={styles.required}>*</span>
-            </label>
-            <div style={styles.inputWrapper}>
-              {/* <Calendar style={styles.icon} /> */}
-              <input  className='bodyMediumText5'
-                type="date"
-                name="startDate"
-                required
-                value={formData.startDate}
-                onChange={handleChange}
-                onFocus={(e) => e.target.showPicker && e.target.showPicker()}
-                min={new Date().toISOString().split('T')[0]}
-                style={styles.input}
-                placeholder="Pick start date"
-              />
-            </div>
-          </div>
-
-          <div style={styles.formGroup}>
-            <label  className='bodyMediumText5' style={styles.label}>
-              End Date <span style={styles.required}>*</span>
-            </label>
-            <div style={styles.inputWrapper}>
-              {/* <Calendar style={styles.icon} /> */}
-              <input  className='bodyMediumText5'
-                type="date"
-                name="endDate"
-                required
-                onFocus={(e) => e.target.showPicker && e.target.showPicker()}
-                value={formData.endDate}
-                onChange={handleChange}
-                min={formData.startDate || new Date().toISOString().split('T')[0]}
-                style={styles.input}
-                placeholder="Pick end date"
-              />
-            </div>
-          </div>
+       
+       <div>
+        <label className="block text-sm font-medium text-gray-700">Select Date</label>
+        <div
+          onClick={() => setCalendarVisible(!calendarVisible)}
+          className="flex items-center justify-between w-full border rounded-md px-3 py-2 cursor-pointer hover:border-blue-400"
+        >
+          <span className="text-gray-700">
+            {formData.selectedDate ? formData.selectedDate : 'Pick a date'}
+          </span>
+          <Calendar className="w-5 h-5 text-blue-500" />
         </div>
+        {calendarVisible && (
+          <div className="mt-2 relative z-50">
+           <CustomCalendar
+  onDateSelect={(date) => {
+    const formatted = date.toISOString().split('T')[0];
+    setFormData({ ...formData, selectedDate: formatted });
+    setCalendarVisible(false);
+  }}
+  singleDateMode={true}
+/>
+
+          </div>
+        )}
+      </div>
 
         {/* Subject */}
         <div style={styles.formGroup}>

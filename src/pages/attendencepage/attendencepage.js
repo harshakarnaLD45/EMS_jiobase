@@ -29,8 +29,11 @@ const months = [
 const years = ["2023", "2024", "2025", "2026"];
 
 export default function Attendance() {
-    const [selectedMonth, setSelectedMonth] = useState("October");
-    const [selectedYear, setSelectedYear] = useState("2025");
+    const currentDate = new Date();
+    const currentMonth = months[currentDate.getMonth()]; 
+    const currentYear = String(currentDate.getFullYear()); 
+    const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+    const [selectedYear, setSelectedYear] = useState(currentYear);
     const [activeView, setActiveView] = useState("calendar");
     const [timesheets, setTimesheets] = useState([]);
     const [leaveRequests, setLeaveRequests] = useState([]);
