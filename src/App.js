@@ -16,18 +16,10 @@ import Attendance from './pages/attendencepage/attendencepage.js';
 // Default Redirect Component
 // ===============================
 const DefaultRedirect = () => {
-  const { user, isAdmin, isEmployee } = useAuth();
+  const { isAdmin, isEmployee } = useAuth();
 
-  // Determine where to send the user after login
-  if (isAdmin()) {
-    return <Navigate to="/admin" replace />;
-  }
-
-  if (isEmployee()) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  // Fallback redirect
+  if (isAdmin()) return <Navigate to="/admin" replace />;
+  if (isEmployee()) return <Navigate to="/dashboard" replace />;
   return <Navigate to="/dashboard" replace />;
 };
 
@@ -37,8 +29,8 @@ const DefaultRedirect = () => {
 function App() {
   return (
     <div className="App">
-      {/* ✅ Wrap everything with BrowserRouter */}
-     
+      {/* ✅ Only one BrowserRouter (Router) here */}
+      <Router>
         <AuthProvider>
           <EmployeeProvider>
             <LeaveProvider>
@@ -91,7 +83,7 @@ function App() {
             </LeaveProvider>
           </EmployeeProvider>
         </AuthProvider>
-     
+      </Router>
     </div>
   );
 }
