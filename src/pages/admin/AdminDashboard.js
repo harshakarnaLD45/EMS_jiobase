@@ -899,7 +899,9 @@ const AdminDashboard = () => {
                                     </div>
                                     <div className="leave-details">
                                         <span className="leave-type">{timesheet.hours}h - {new Date(timesheet.date).toLocaleDateString()}</span>
-                                        <span className="leave-date bodyRegularText4">Status: {timesheet.status}</span>
+                                         <span className="leave-date bodyRegularText4"> Status: {timesheet.status  ? timesheet.status.charAt(0).toUpperCase() + timesheet.status.slice(1).toLowerCase() : 'Pending'}
+                                         </span>
+
                                     </div>
                                     <div style={{
                                         fontSize: '0.875rem',

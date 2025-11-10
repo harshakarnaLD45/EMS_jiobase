@@ -394,7 +394,8 @@ setRecentTimesheets(recentTimesheetData);
           marginRight: '4px',
         }}
       />
-      {stats.todayStatus}
+      {stats.todayStatus ? stats.todayStatus.charAt(0).toUpperCase() + stats.todayStatus.slice(1).toLowerCase() : ''}
+
     </span>
   )}
 </div>
