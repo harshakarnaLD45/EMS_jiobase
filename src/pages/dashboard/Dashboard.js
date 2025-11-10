@@ -81,18 +81,61 @@ const Dashboard = () => {
         //console.log('👤 Loading employee dashboard data...');
 
         // Get employee timesheets using employee_id (since we only have employee auth now)
-        const timesheets = await timesheetApi.getTimesheetsByEmployeeId(user.employee_id || user.id);
-        const recentTimesheetData = timesheets.slice(0, 3).map(timesheet => ({
-          id: timesheet.id,
-          date: new Date(timesheet.date || timesheet.workDate).toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-          }),
-          hours: `${timesheet.hours || timesheet.hoursWorked || 0} hours`,
-          status: timesheet.status || 'pending'
-        }));
-        setRecentTimesheets(recentTimesheetData);
+          // Get all employee timesheets
+const timesheets = await timesheetApi.getTimesheetsByEmployeeId(user.employee_id || user.id);
+
+// ✅ Apply filters before displaying
+let filteredTimesheets = [...timesheets];
+
+// Week filter
+if (filters.filterMode === 'week') {
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  filteredTimesheets = timesheets.filter(t => {
+    const d = new Date(t.date || t.workDate);
+    return d >= weekStart;
+  });
+}
+
+// Month filter
+if (filters.filterMode === 'month') {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  filteredTimesheets = timesheets.filter(t => {
+    const d = new Date(t.date || t.workDate);
+    return d >= monthStart;
+  });
+}
+
+// Custom date range filter
+if (filters.filterMode === 'custom' && filters.startDate && filters.endDate) {
+  const start = new Date(filters.startDate);
+  const end = new Date(filters.endDate);
+  end.setHours(23, 59, 59, 999);
+
+  filteredTimesheets = timesheets.filter(t => {
+    const d = new Date(t.date || t.workDate);
+    return d >= start && d <= end;
+  });
+}
+
+// Set recent timesheets (show only first 3)
+const recentTimesheetData = filteredTimesheets.slice(0, 3).map(timesheet => ({
+  id: timesheet.id,
+  date: new Date(timesheet.date || timesheet.workDate).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  }),
+  hours: `${timesheet.hours || timesheet.hoursWorked || 0} hours`,
+  status: timesheet.status || 'pending'
+}));
+setRecentTimesheets(recentTimesheetData);
+
 
         // Get leave balance using employee_id if available, fallback to user.id
         let leaveBalance = { sick_leave: 0, casual_leave: 0 };
@@ -205,11 +248,12 @@ const Dashboard = () => {
   };
 
   // Load data when component mounts or user changes
-  useEffect(() => {
-    if (user) {
-      loadDashboardData();
-    }
-  }, [user, isAdmin]);
+ useEffect(() => {
+  if (user) {
+    loadDashboardData();
+  }
+}, [user, isAdmin, filters]);
+
 
   if (loading) {
     return (
@@ -237,7 +281,7 @@ const Dashboard = () => {
           <div>
            <h1 className="good_greeting bodyMediumText2">
            {getGreeting()}, {user?.name?.split(' ')[0] || 'User'}!
-</h1>
+           </h1>
 
             <p className="text-text-secondary bodyRegularText4">
               
@@ -320,7 +364,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="stats-grid mb-2">
+               <div className="stats-grid mb-2">
        
             <div className="stats-card">
               <div className="stats-card_container">
@@ -390,11 +434,9 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-           
-        
-      </div>
+           </div>
 
-             <div className="filter_section" style={{ marginTop: '1.5rem' }}>
+        <div className="filter_section" style={{ marginTop: '1.5rem' }}>
         <div className="filter_group">
           <button
             className={`bodyMediumText4 filter_btn ${filters.filterMode === 'week' ? 'active' : ''}`}
@@ -483,7 +525,9 @@ const Dashboard = () => {
                   </div>
                   <span className={`bodyMediumText4 status-badge ${timesheet.status}`}>
                     <span style={{ backgroundColor: timesheet.status === "approved" ? "#093c1dff" : "#db712fff", width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block', marginRight: '6px' }} />
-                    {timesheet.status}
+                    {timesheet.status ? timesheet.status.charAt(0).toUpperCase() + timesheet.status.slice(1).toLowerCase() : ''}
+
+
                   </span>
                 </div>
               ))}

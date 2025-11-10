@@ -268,35 +268,52 @@ const Leave = () => {
   const leaveHistory = formatLeaveHistory();
 
   // Filter logic
-  const filteredLeaveHistory = leaveHistory.filter((leave) => {
-    // Employee filter (admin only)
-    if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee) return false;
+  // Filter logic
+const filteredLeaveHistory = leaveHistory.filter((leave) => {
+  // Employee filter (admin only)
+  if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee)
+    return false;
 
-    const leaveStart = new Date(leave.raw_start_date);
-    const leaveEnd = new Date(leave.raw_end_date);
+  const leaveStart = new Date(leave.raw_start_date);
+  const leaveEnd = new Date(leave.raw_end_date);
+  const today = new Date();
 
-    let filterStart = null;
-    let filterEnd = null;
+  let filterStart = null;
+  let filterEnd = null;
 
-    if (filters.filterMode === 'week') {
-      filterStart = new Date();
-      filterStart.setDate(filterStart.getDate() - 7);
-      filterEnd = new Date();
-    } else if (filters.filterMode === 'month') {
-      filterStart = new Date();
-      filterStart.setDate(filterStart.getDate() - 30);
-      filterEnd = new Date();
-    } else if (filters.filterMode === 'custom') {
-      if (filters.startDate) filterStart = new Date(filters.startDate);
-      if (filters.endDate) filterEnd = new Date(filters.endDate);
-    }
+  // --- Handle each filter mode correctly ---
+  if (filters.filterMode === 'week') {
+    // Get start of this week (Monday)
+    const dayOfWeek = today.getDay(); // 0 = Sunday
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    filterStart = new Date(today);
+    filterStart.setDate(today.getDate() - diffToMonday);
+    filterStart.setHours(0, 0, 0, 0);
 
-    if (filterStart && filterEnd) {
-      if (leaveEnd < filterStart || leaveStart > filterEnd) return false;
-    }
+    // End of the week (Sunday)
+    filterEnd = new Date(filterStart);
+    filterEnd.setDate(filterStart.getDate() + 6);
+    filterEnd.setHours(23, 59, 59, 999);
+  } 
+  else if (filters.filterMode === 'month') {
+    // Start and end of current month
+    filterStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    filterEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+  } 
+  else if (filters.filterMode === 'custom') {
+    if (filters.startDate) filterStart = new Date(filters.startDate);
+    if (filters.endDate) filterEnd = new Date(filters.endDate);
+  }
 
-    return true;
-  });
+  // --- Apply filter ---
+  if (filterStart && filterEnd) {
+    // Include leave if it overlaps with selected range
+    return leaveEnd >= filterStart && leaveStart <= filterEnd;
+  }
+
+  return true; // 'all' mode or no filters
+});
+
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));

@@ -1,4 +1,6 @@
 import './App.css';
+import { BrowserRouter as Router } from 'react-router-dom';
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout, ProtectedRoute, RouteHandler } from './components';
 import Dashboard from './pages/dashboard/Dashboard';
@@ -46,6 +48,7 @@ function App() {
       <AuthProvider>
         <EmployeeProvider>
           <LeaveProvider>
+            <Router>
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
@@ -82,7 +85,9 @@ function App() {
               
               {/* Catch all route */}
               <Route path="*" element={<Navigate to="/" replace />} />
+            
             </Routes>
+            </Router>
           </LeaveProvider>
         </EmployeeProvider>
       </AuthProvider>
