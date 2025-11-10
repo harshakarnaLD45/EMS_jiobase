@@ -1,7 +1,5 @@
 import './App.css';
-import { BrowserRouter as Router } from 'react-router-dom';
-
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout, ProtectedRoute, RouteHandler } from './components';
 import Dashboard from './pages/dashboard/Dashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -14,83 +12,86 @@ import { LeaveProvider } from './contexts/LeaveContext';
 import { EmployeeProvider } from './contexts/EmployeeContext';
 import Attendance from './pages/attendencepage/attendencepage.js';
 
-// Component to handle default routing based on user type
+// ===============================
+// Default Redirect Component
+// ===============================
 const DefaultRedirect = () => {
   const { user, isAdmin, isEmployee } = useAuth();
-  
-  // console.log('🎯 DefaultRedirect - User type check:', {
-  //   user: user?.email,
-  //   isAdmin: isAdmin(),
-  //   isEmployee: isEmployee(),
-  //   userRole: user?.role
-  // });
-  
-  // If admin, redirect to admin dashboard
+
+  // Determine where to send the user after login
   if (isAdmin()) {
-    //console.log('✅ Admin detected - redirecting to /admin');
     return <Navigate to="/admin" replace />;
   }
-  
-  // If employee, redirect to regular dashboard
+
   if (isEmployee()) {
-    ////console.log('✅ Employee detected - redirecting to /dashboard');
     return <Navigate to="/dashboard" replace />;
   }
-  
-  // Fallback to dashboard if user type is unclear
-  //console.log('⚠️ User type unclear - defaulting to /dashboard');
+
+  // Fallback redirect
   return <Navigate to="/dashboard" replace />;
 };
 
+// ===============================
+// App Component
+// ===============================
 function App() {
   return (
     <div className="App">
-      <AuthProvider>
-        <EmployeeProvider>
-          <LeaveProvider>
-            <Router>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
-              
-              {/* Protected Routes */}
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <RouteHandler>
-                    <Layout />
-                  </RouteHandler>
-                </ProtectedRoute>
-              }>
-                {/* Default redirect - handled by RouteHandler based on user type */}
-                <Route index element={<DefaultRedirect />} />
-                
-                {/* Routes accessible to all authenticated users */}
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="timesheet" element={<Timesheet />} />
-                <Route path="leave" element={<Leave />} />
-                <Route path="attendance" element={<Attendance />} />
-                
-                {/* Admin-only routes */}
-                <Route path="admin" element={
-                  <ProtectedRoute adminOnly={true}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="employees" element={
-                  <ProtectedRoute adminOnly={true}>
-                    <EmployeeManagement />
-                  </ProtectedRoute>
-                } />
-              </Route>
-              
-              {/* Catch all route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            
-            </Routes>
-            </Router>
-          </LeaveProvider>
-        </EmployeeProvider>
-      </AuthProvider>
+      {/* ✅ Wrap everything with BrowserRouter */}
+     
+        <AuthProvider>
+          <EmployeeProvider>
+            <LeaveProvider>
+              <Routes>
+                {/* ---------- Public Route ---------- */}
+                <Route path="/login" element={<Login />} />
+
+                {/* ---------- Protected Routes ---------- */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <RouteHandler>
+                        <Layout />
+                      </RouteHandler>
+                    </ProtectedRoute>
+                  }
+                >
+                  {/* Default Redirect (based on role) */}
+                  <Route index element={<DefaultRedirect />} />
+
+                  {/* Common Routes (for all logged-in users) */}
+                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="timesheet" element={<Timesheet />} />
+                  <Route path="leave" element={<Leave />} />
+                  <Route path="attendance" element={<Attendance />} />
+
+                  {/* Admin-only Routes */}
+                  <Route
+                    path="admin"
+                    element={
+                      <ProtectedRoute adminOnly={true}>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="employees"
+                    element={
+                      <ProtectedRoute adminOnly={true}>
+                        <EmployeeManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* ---------- Catch-all Route ---------- */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </LeaveProvider>
+          </EmployeeProvider>
+        </AuthProvider>
+     
     </div>
   );
 }
