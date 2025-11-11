@@ -5,7 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { Input, InputAdornment } from '@mui/material';
 import { leaveApi } from '../../../utils/supabase';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import CustomCalendar from '../../../components/common/calender/CustomCalendar';
+import CustomCalendar from '../calender/CustomCalendar'
 
 
 const styles = {
@@ -184,11 +184,14 @@ const styles = {
 const LeaveRequestForm = ({ onClose }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState({
-    leaveType: '',
-    selectedDate: '',
-    subject: '',
-    reason: ''
-  });
+  leaveType: '',       // Leave type dropdown
+  selectedDate: '',    // Displayed in input field
+  startDate: '',       // Start date for submission
+  endDate: '',         // End date for submission
+  subject: '',         // Subject input
+  reason: ''           // Reason textarea
+});
+
   const [documentFile, setDocumentFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -200,6 +203,8 @@ const LeaveRequestForm = ({ onClose }) => {
     checked: false
   });
   const { leaveBalance, loading, error, requestLeave } = useLeave();
+  const [dateError, setDateError] = useState('');
+
 
 
 
@@ -345,73 +350,72 @@ const LeaveRequestForm = ({ onClose }) => {
     return formData.leaveType === 'sick' && calculateLeaveDays() > 1;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  // Validate date selection
+  if (!formData.startDate || !formData.endDate) {
+    setDateError("Please select a leave date");
+    setIsSubmitting(false);
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setDateError(''); // Clear any previous errors
 
-    // Check for active leave request before proceeding
+  try {
+    // 1️⃣ Check active leave and overlaps
     if (activeLeaveCheck.hasActiveLeave) {
-      alert('You already have an active approved leave request. Please wait until your current leave ends before submitting a new request.');
+      alert('You already have an active approved leave request.');
       setIsSubmitting(false);
       return;
     }
 
-    // Additional check: ensure there are no overlapping approved leave requests for the requested date range
-    try {
-      const employeeIdToCheck = user?.employee_id || user?.id;
-      const overlapResult = await leaveApi.checkOverlappingApprovedLeave(
-        employeeIdToCheck,
-        user?.id,
-        formData.startDate,
-        formData.endDate
-      );
-
-      if (overlapResult && overlapResult.hasOverlap) {
-        const overlapping = overlapResult.overlappingLeaves[0];
-        const overlapMsg = `An approved leave already exists (${new Date(overlapping.start_date).toLocaleDateString()} - ${new Date(overlapping.end_date).toLocaleDateString()}) for this employee. Please modify your requested dates or cancel the existing approved leave.`;
-        alert(overlapMsg);
-        setIsSubmitting(false);
-        return;
-      }
-    } catch (err) {
-      console.error('❌ Error checking overlapping leaves before submit:', err);
-      // If the check fails, prevent accidental duplicate submissions by stopping submission and informing user
-      alert('Could not verify existing approved leaves. Please try again or contact admin.');
-      setIsSubmitting(false);
-      return;
+    // 2️⃣ Upload file if required
+    let documentFileUrl = null;
+    if (documentFile) {
+      const { data, error: uploadError } = await leaveApi.uploadDocument(documentFile);
+      if (uploadError) throw uploadError;
+      documentFileUrl = data.path; // or data.Key depending on your storage
     }
 
-    // Validate file upload for sick leave > 1 day
-    if (isDocumentationRequired() && !documentFile) {
-      setFileError('Please upload supporting documentation for sick leave requests of more than one day.');
-      setIsSubmitting(false);
-      return;
-    }
+    // 3️⃣ Prepare leave request payload
+  const leaveRequest = {
+  user_id: user?.id ?? user?.user?.id ?? null,
+  employee_id: user?.employee_id ?? user?.id ?? user?.user?.id ?? null,
+  leave_type: formData.leaveType,
+  start_date: formData.startDate,
+  end_date: formData.endDate,
+  subject: formData.subject,
+  reason: formData.reason,
+  status: 'pending',
+  document_url: documentFileUrl || null
+};
 
-    try {
-      const leaveRequest = {
-        user_id: user?.id,
-        employee_id: user?.employee_id || user?.id, // Use employee_id if available, fallback to user.id
-        leave_type: formData.leaveType,
-        start_date: formData.startDate,
-        end_date: formData.endDate,
-        subject: formData.subject,
-        reason: formData.reason,
-        status: 'pending',
-        document: documentFile, // Pass the file object directly
-        user: user // Pass user data for employee lookup
-      };
+// 🧠 Debug logs (important)
+console.log("🧾 Leave Request Payload:", leaveRequest);
+console.log("👤 Current user:", user);
 
-      await requestLeave(leaveRequest);
-      //console.log('Leave request submitted successfully');
-      onClose();
-    } catch (error) {
-      console.error('Error submitting leave request:', error);
-      alert(`Error submitting leave request: ${error.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+// Debug log
+console.log("📤 Submitting leave request:", leaveRequest);
+    // 4️⃣ Insert as single row using array + .single() for Supabase
+    const { data, error } = await leaveApi.requestLeave([leaveRequest], { single: true });
+    // OR, if inside leaveApi.requestLeave you call Supabase directly:
+    // const { data, error } = await supabase.from('leaves').insert([leaveRequest]).select().single();
+
+    if (error) throw error;
+
+    console.log('Leave request submitted successfully:', data);
+    onClose();
+  } catch (err) {
+    console.error('Error submitting leave request:', err);
+    alert(`Error submitting leave request: ${err.message}`);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+
 
   return (
     <div style={styles.container}>
@@ -564,31 +568,102 @@ const LeaveRequestForm = ({ onClose }) => {
 
         {/* Date Range */}
        
-       <div>
-        <label className="block text-sm font-medium text-gray-700">Select Date</label>
-        <div
-          onClick={() => setCalendarVisible(!calendarVisible)}
-          className="flex items-center justify-between w-full border rounded-md px-3 py-2 cursor-pointer hover:border-blue-400"
-        >
-          <span className="text-gray-700">
-            {formData.selectedDate ? formData.selectedDate : 'Pick a date'}
-          </span>
-          <Calendar className="w-5 h-5 text-blue-500" />
-        </div>
-        {calendarVisible && (
-          <div className="mt-2 relative z-50">
-           <CustomCalendar
-  onDateSelect={(date) => {
-    const formatted = date.toISOString().split('T')[0];
-    setFormData({ ...formData, selectedDate: formatted });
-    setCalendarVisible(false);
+   <div style={styles.formGroup}>
+  <label className="bodyMediumText5" style={styles.label}>
+    Select Date <span style={styles.required}>*</span>
+  </label>
+  <div
+    onClick={() => {
+      setCalendarVisible(!calendarVisible);
+      setDateError(''); // Clear error when opening calendar
+    }}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      width: '100%',
+      border: dateError ? '1px solid #ef4444' : '1px solid #d1d5db',
+      borderRadius: '0.5rem',
+      padding: '0.5rem 0.75rem',
+      cursor: 'pointer',
+      transition: 'all 150ms ease',
+      backgroundColor: calendarVisible ? '#f0f9ff' : 'white'
+    }}
+    onMouseEnter={(e) => {
+      if (!dateError) {
+        e.currentTarget.style.borderColor = '#3b82f6';
+      }
+    }}
+    onMouseLeave={(e) => {
+      if (!dateError) {
+        e.currentTarget.style.borderColor = '#d1d5db';
+      }
+    }}
+  >
+    <span className="bodyMediumText5" style={{ 
+      color: formData.selectedDate ? '#374151' : '#9ca3af' 
+    }}>
+      {formData.selectedDate || 'Pick a date'}
+    </span>
+    <CalendarIcon style={{ width: '1.25rem', height: '1.25rem', color: '#3b82f6' }} />
+  </div>
+  
+  {/* Inline Date Error Message */}
+  {dateError && (
+    <div style={{
+      marginTop: '0.5rem',
+      padding: '0.75rem',
+      backgroundColor: '#fef2f2',
+      border: '1px solid #fecaca',
+      borderRadius: '0.5rem',
+      color: '#dc2626',
+      fontSize: '0.875rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.5rem'
+    }}>
+      <svg style={{ width: '1rem', height: '1rem', flexShrink: 0 }} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+      </svg>
+      <span className="bodyMediumText5">{dateError}</span>
+    </div>
+  )}
+  
+  {calendarVisible && (
+    <div style={{ 
+      marginTop: '0.5rem', 
+      position: 'relative', 
+      zIndex: 50,
+      backgroundColor: 'white',
+      borderRadius: '0.5rem',
+      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+      padding: '0.5rem'
+    }}>
+     
+<CustomCalendar
+  onDateRangeSelect={(range) => {
+    if (range.from && range.to) {
+      const startDate = range.from.toISOString().split('T')[0];
+      const endDate = range.to.toISOString().split('T')[0];
+      
+      setFormData({
+        ...formData,
+        startDate: startDate,
+        endDate: endDate,
+        selectedDate: `${startDate} to ${endDate}`
+      });
+      
+      setCalendarVisible(false);
+    }
   }}
-  singleDateMode={true}
+  singleDateMode={false}  
+  minDate={new Date()}
 />
 
-          </div>
-        )}
-      </div>
+    </div>
+  )}
+</div>
+
 
         {/* Subject */}
         <div style={styles.formGroup}>

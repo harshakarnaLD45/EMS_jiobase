@@ -34,12 +34,54 @@ const Leave = () => {
   const [formError, setFormError] = useState('');
   const [actionStatus, setActionStatus] = useState({});
   const [actionLoading, setActionLoading] = useState(null);
+  const [employeeId, setEmployeeId] = useState(null);
+
+  // FIXED: Get employee_id properly on mount
+  useEffect(() => {
+    const getEmployeeId = async () => {
+      if (!user) return;
+      
+      try {
+        // Check if user already has employee_id
+        if (user.employee_id) {
+          setEmployeeId(user.employee_id);
+          return;
+        }
+
+        // Otherwise fetch from employees table
+        const { supabase } = await import('../../utils/supabase');
+        const { data: employeeData, error: empError } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (empError) {
+          console.error('Error fetching employee_id:', empError);
+          setFormError('Unable to identify employee. Please contact admin.');
+          return;
+        }
+
+        if (employeeData?.id) {
+          setEmployeeId(employeeData.id);
+        } else {
+          console.error('No employee record found for user:', user.id);
+          setFormError('No employee record found. Please contact admin.');
+        }
+      } catch (err) {
+        console.error('Error in getEmployeeId:', err);
+        setFormError('Failed to load employee data.');
+      }
+    };
+
+    getEmployeeId();
+  }, [user]);
 
   useEffect(() => {
-    if (user) {
+    if (user && employeeId) {
       refreshLeaveData();
     }
-  }, [user, isAdmin]);
+  }, [user, employeeId, isAdmin]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -52,16 +94,18 @@ const Leave = () => {
   }, [calendarVisible]);
 
   const loadLeaveRequests = async () => {
-    if (!user) return;
+    if (!user || (!isAdmin && !employeeId)) return;
+    
     try {
       const { leaveApi } = await import('../../utils/supabase');
       let requests = [];
+      
       if (isAdmin) {
         requests = await leaveApi.getAllLeaveRequestsWithEmployees();
       } else {
-        const employeeId = user.employee_id || user.id;
         requests = await leaveApi.getLeaveRequests(employeeId);
       }
+      
       const transformedRequests = requests.map(request => ({
         ...request,
         employee_name: request.employees?.name || 
@@ -69,6 +113,7 @@ const Leave = () => {
                       request.employee_name ||
                       null
       }));
+      
       setLeaveRequests(transformedRequests || []);
     } catch (error) {
       console.error('Error loading leave requests:', error);
@@ -162,7 +207,9 @@ const Leave = () => {
         }, 0);
       
       // Get used days from balance table (fallback)
-      const usedFromBalance = leaveBalance?.[`${config.type}_used`] || 0;
+      const usedFromBalance = config.type === 'sick'
+        ? leaveBalance?.used_sick_leaves || 0
+        : leaveBalance?.used_casual_leaves || 0;
       
       // Use the MAXIMUM to ensure accuracy (requests are source of truth)
       const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
@@ -225,10 +272,24 @@ const Leave = () => {
   const leaveTypes = isAdmin ? [] : calculateLeaveStats();
   const stats = isAdmin ? { totalDaysUsed: 0, pendingRequests: 0 } : calculateStats();
 
+  // FIXED: Handle leave submission with proper employee_id validation
   const handleLeaveSubmit = async (leaveData) => {
     try {
       setFormError('');
-      const leaveRequestData = { ...leaveData, employee_id: user.employee_id || user.id, user_id: user.id };
+      
+      // Validate employee_id exists
+      if (!employeeId) {
+        throw new Error('Employee ID not found. Please refresh the page or contact admin.');
+      }
+
+      const leaveRequestData = { 
+        ...leaveData, 
+        employee_id: employeeId,
+        user_id: user.id 
+      };
+
+      console.log('Submitting leave request:', leaveRequestData);
+      
       await requestLeave(leaveRequestData);
       setShowLeaveForm(false);
       await refreshLeaveData();
@@ -268,52 +329,50 @@ const Leave = () => {
   const leaveHistory = formatLeaveHistory();
 
   // Filter logic
-  // Filter logic
-const filteredLeaveHistory = leaveHistory.filter((leave) => {
-  // Employee filter (admin only)
-  if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee)
-    return false;
+  const filteredLeaveHistory = leaveHistory.filter((leave) => {
+    // Employee filter (admin only)
+    if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee)
+      return false;
 
-  const leaveStart = new Date(leave.raw_start_date);
-  const leaveEnd = new Date(leave.raw_end_date);
-  const today = new Date();
+    const leaveStart = new Date(leave.raw_start_date);
+    const leaveEnd = new Date(leave.raw_end_date);
+    const today = new Date();
 
-  let filterStart = null;
-  let filterEnd = null;
+    let filterStart = null;
+    let filterEnd = null;
 
-  // --- Handle each filter mode correctly ---
-  if (filters.filterMode === 'week') {
-    // Get start of this week (Monday)
-    const dayOfWeek = today.getDay(); // 0 = Sunday
-    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    filterStart = new Date(today);
-    filterStart.setDate(today.getDate() - diffToMonday);
-    filterStart.setHours(0, 0, 0, 0);
+    // --- Handle each filter mode correctly ---
+    if (filters.filterMode === 'week') {
+      // Get start of this week (Monday)
+      const dayOfWeek = today.getDay(); // 0 = Sunday
+      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      filterStart = new Date(today);
+      filterStart.setDate(today.getDate() - diffToMonday);
+      filterStart.setHours(0, 0, 0, 0);
 
-    // End of the week (Sunday)
-    filterEnd = new Date(filterStart);
-    filterEnd.setDate(filterStart.getDate() + 6);
-    filterEnd.setHours(23, 59, 59, 999);
-  } 
-  else if (filters.filterMode === 'month') {
-    // Start and end of current month
-    filterStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    filterEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-  } 
-  else if (filters.filterMode === 'custom') {
-    if (filters.startDate) filterStart = new Date(filters.startDate);
-    if (filters.endDate) filterEnd = new Date(filters.endDate);
-  }
+      // End of the week (Sunday)
+      filterEnd = new Date(filterStart);
+      filterEnd.setDate(filterStart.getDate() + 6);
+      filterEnd.setHours(23, 59, 59, 999);
+    } 
+    else if (filters.filterMode === 'month') {
+      // Start and end of current month
+      filterStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      filterEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+    } 
+    else if (filters.filterMode === 'custom') {
+      if (filters.startDate) filterStart = new Date(filters.startDate);
+      if (filters.endDate) filterEnd = new Date(filters.endDate);
+    }
 
-  // --- Apply filter ---
-  if (filterStart && filterEnd) {
-    // Include leave if it overlaps with selected range
-    return leaveEnd >= filterStart && leaveStart <= filterEnd;
-  }
+    // --- Apply filter ---
+    if (filterStart && filterEnd) {
+      // Include leave if it overlaps with selected range
+      return leaveEnd >= filterStart && leaveStart <= filterEnd;
+    }
 
-  return true; // 'all' mode or no filters
-});
-
+    return true; // 'all' mode or no filters
+  });
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
@@ -345,7 +404,8 @@ const filteredLeaveHistory = leaveHistory.filter((leave) => {
           <button 
             className="request_leave_btn bodyMediumText3"
             onClick={() => setShowLeaveForm(true)}
-            disabled={loading}
+            disabled={loading || !employeeId}
+            title={!employeeId ? 'Loading employee data...' : 'Request Leave'}
           >
             <Plus size={16} />
             Request Leave
@@ -353,6 +413,20 @@ const filteredLeaveHistory = leaveHistory.filter((leave) => {
           )}
         </div>
       </div>
+
+      {/* Error Message for missing employee_id */}
+      {!isAdmin && !employeeId && !loading && (
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          color: '#dc2626',
+          padding: '1rem',
+          borderRadius: '0.5rem',
+          margin: '1rem 0'
+        }}>
+          <strong>Error:</strong> Unable to load employee data. Please refresh the page or contact administrator.
+        </div>
+      )}
 
       {/* Leave Types Grid */}
       {!isAdmin && (
@@ -680,20 +754,12 @@ const filteredLeaveHistory = leaveHistory.filter((leave) => {
             
             <LeaveRequestForm
               onSubmit={handleLeaveSubmit}
-              onCancel={() => {
-                setShowLeaveForm(false);
-                setFormError('');
-              }}
               onClose={() => {
                 setShowLeaveForm(false);
                 setFormError('');
               }}
-              availableLeaveTypes={leaveTypeConfigs.map(config => ({
-                value: config.type,
-                label: config.displayName,
-                available: leaveBalance?.[`${config.type}_leave`] || 0
-              }))}
             />
+
           </div>
         </div>
       )}

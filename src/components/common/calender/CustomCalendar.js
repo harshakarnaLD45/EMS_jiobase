@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
-import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isSameMonth, isSameDay, addMonths, subMonths, isBefore, startOfDay } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
+const CustomCalendar = ({ 
+  onDateRangeSelect, 
+  onDateSelect, // NEW: Support single date selection
+  selectedRange, 
+  onClose,
+  singleDateMode = false, // NEW: Single date mode flag
+  minDate = null, // NEW: Minimum selectable date
+}) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [dateRange, setDateRange] = useState(selectedRange || { from: null, to: null });
+  const [singleDate, setSingleDate] = useState(null); // NEW: Single date state
 
   const renderHeader = () => {
     return (
@@ -42,6 +50,13 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
   };
 
   const handleDateClick = (day) => {
+    // NEW: Handle single date mode
+    if (singleDateMode) {
+      setSingleDate(day);
+      return;
+    }
+
+    // Original range selection logic
     if (!dateRange.from || (dateRange.from && dateRange.to)) {
       // Starting new selection
       const newRange = { from: day, to: null };
@@ -68,27 +83,40 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
     let days = [];
     let day = startDate;
 
+    // NEW: Normalize minDate to start of day for comparison
+    const normalizedMinDate = minDate ? startOfDay(minDate) : null;
+
     while (day <= endDate) {
       for (let i = 0; i < 7; i++) {
         const cloneDay = day;
         const isCurrentMonth = isSameMonth(day, monthStart);
-        const isSelected = (dateRange.from && isSameDay(day, dateRange.from)) ||
-                           (dateRange.to && isSameDay(day, dateRange.to));
-        const isInRange = dateRange.from && dateRange.to && day >= dateRange.from && day <= dateRange.to;
-        const isToday = isSameDay(day, new Date());
         const isSunday = day.getDay() === 0; // Disable Sundays
+        
+        // NEW: Check if date is before minDate
+        const isBeforeMinDate = normalizedMinDate && isBefore(startOfDay(day), normalizedMinDate);
+        
+        // Determine selection state based on mode
+        const isSelected = singleDateMode 
+          ? (singleDate && isSameDay(day, singleDate))
+          : ((dateRange.from && isSameDay(day, dateRange.from)) || (dateRange.to && isSameDay(day, dateRange.to)));
+        
+        const isInRange = !singleDateMode && dateRange.from && dateRange.to && day >= dateRange.from && day <= dateRange.to;
+        const isToday = isSameDay(day, new Date());
+        
+        // NEW: Disable if not current month, is Sunday, or is before minDate
+        const isDisabled = !isCurrentMonth || isSunday || isBeforeMinDate;
 
         days.push(
           <div
             key={day}
             className={`calendar-cell ${
-              !isCurrentMonth ? 'calendar-cell-disabled' : ''
-            } ${isSunday ? 'calendar-cell-disabled' : ''} ${
+              isDisabled ? 'calendar-cell-disabled' : ''
+            } ${
               isSelected ? 'calendar-cell-selected' : ''
             } ${isInRange ? 'calendar-cell-in-range' : ''} ${
               isToday ? 'calendar-cell-today' : ''
             }`}
-            onClick={() => isCurrentMonth && !isSunday && handleDateClick(cloneDay)}
+            onClick={() => !isDisabled && handleDateClick(cloneDay)}
           >
             <span className="calendar-cell-text">{format(day, 'd')}</span>
           </div>
@@ -108,13 +136,32 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
   };
 
   const handleClear = () => {
-    setDateRange({ from: null, to: null });
-    if (onDateRangeSelect) {
-      onDateRangeSelect({ from: null, to: null });
+    if (singleDateMode) {
+      setSingleDate(null);
+      if (onDateSelect) {
+        onDateSelect(null);
+      }
+    } else {
+      setDateRange({ from: null, to: null });
+      if (onDateRangeSelect) {
+        onDateRangeSelect({ from: null, to: null });
+      }
     }
   };
 
   const handleApply = () => {
+    // NEW: Handle single date mode
+    if (singleDateMode) {
+      if (onDateSelect && singleDate) {
+        onDateSelect(singleDate);
+      }
+      if (onClose) {
+        onClose();
+      }
+      return;
+    }
+
+    // Original range mode
     if (onDateRangeSelect && dateRange.from && dateRange.to) {
       onDateRangeSelect(dateRange);
     }
@@ -125,7 +172,7 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
 
   // Calculate total leave days excluding Sundays
   const totalDaysExcludingSundays = (() => {
-    if (!dateRange.from || !dateRange.to) return 0;
+    if (singleDateMode || !dateRange.from || !dateRange.to) return 0;
     let count = 0;
     let current = new Date(dateRange.from);
     const end = new Date(dateRange.to);
@@ -138,6 +185,9 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
     return count;
   })();
 
+  // Determine if we should show the footer
+  const shouldShowFooter = singleDateMode ? singleDate : (dateRange.from && dateRange.to);
+
   return (
     <div className="custom-calendar">
       <div className="calendar-container">
@@ -145,13 +195,21 @@ const CustomCalendar = ({ onDateRangeSelect, selectedRange, onClose }) => {
         {renderDays()}
         {renderCells()}
         
-        {dateRange.from && dateRange.to && (
+        {shouldShowFooter && (
           <div className="calendar-footer">
             <div className="selected-range">
-              <strong>Selected:</strong> {format(dateRange.from, 'MMM dd')} - {format(dateRange.to, 'MMM dd, yyyy')}
-              <span className="range-days">
-                ({totalDaysExcludingSundays} days excluding Sundays)
-              </span>
+              {singleDateMode ? (
+                <>
+                  <strong>Selected:</strong> {format(singleDate, 'MMM dd, yyyy')}
+                </>
+              ) : (
+                <>
+                  <strong>Selected:</strong> {format(dateRange.from, 'MMM dd')} - {format(dateRange.to, 'MMM dd, yyyy')}
+                  <span className="range-days">
+                    ({totalDaysExcludingSundays} days excluding Sundays)
+                  </span>
+                </>
+              )}
             </div>
             <div className="calendar-actions">
               <button className="calendar-btn calendar-btn-clear" onClick={handleClear}>

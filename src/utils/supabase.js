@@ -237,174 +237,165 @@ export const timesheetApi = {
 
 // Leave management related functions
 export const leaveApi = {
-    async getLeaveBalance(employeeId) {
-        const { data, error } = await supabase
-            .from('leave_balances')
-            .select('*')
-            .eq('employee_id', employeeId)
-            .single();
+  async getLeaveBalance(employeeId) {
+    const { data, error } = await supabase
+      .from('leave_balances')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .single();
 
-        if (error) throw error;
-        return data;
-    },
+    if (error) throw error;
 
-    async getLeaveBalanceByEmployeeId(employeeId) {
-        // console.log('🔍 Getting leave balance for employee ID:', employeeId);
-        
-        // First try to get existing balance
-        const { data, error } = await supabase
-            .from('leave_balances')
-            .select('*')
-            .eq('employee_id', employeeId)
-            .single();
+    // Map DB columns to UI-friendly fields
+    return {
+      ...data,
+      casual_leave: data?.remaining_casual_leaves ?? 0,
+      sick_leave: data?.remaining_sick_leaves ?? 0,
+    };
+  },
 
-        if (error) {
-            // console.log('⚠️ No existing leave balance found, creating default:', error.message);
-            
-            // If no balance found, create a default one
-            try {
-                const { data: newBalance, error: createError } = await supabase
-                    .from('leave_balances')
-                    .insert({
-                        employee_id: employeeId,
-                        sick_leave: 8,
-                        casual_leave: 8,
-                    })
-                    .select()
-                    .single();
-                
-                if (createError) throw createError;
-                // console.log('✅ Created default leave balance:', newBalance);
-                return newBalance;
-                
-            } catch (insertError) {
-                console.error('❌ Error creating default leave balance:', insertError);
-                throw insertError;
-            }
-        }
-        
-        // console.log('✅ Found existing leave balance:', data);
-        return data;
-    },
+  async getLeaveBalanceByEmployeeId(employeeId) {
+    console.log("🧠 Creating leave balance for employee:", employeeId);
 
-    async createLeaveRequest(leaveData) {
-        // console.log('🏖️ Creating leave request with data:', leaveData);
-        
-        // Ensure we have employee_id if not provided
-        if (!leaveData.employee_id && leaveData.user) {
-            try {
-                const employee = await employeeApi.getEmployeeByUser(leaveData.user);
-                leaveData.employee_id = employee.employee_id || employee.id;
-                // Also add employee name for better tracking
-                leaveData.employee_name = employee.name || `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
-                // console.log('✅ Added employee_id to leave request:', leaveData.employee_id, 'Name:', leaveData.employee_name);
-            } catch (error) {
-                console.error('⚠️ Could not fetch employee_id for leave request:', error.message);
-                // Continue without employee_id but log the issue
-            }
-        }
+    const { data, error } = await supabase
+      .from('leave_balances')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .single();
 
-        // First, check leave balance using employee_id
-        const balance = await this.getLeaveBalance(leaveData.employee_id);
-        const requestedDays = calculateLeaveDays(leaveData.start_date, leaveData.end_date);
+    if (error) {
+      try {
+        const { data: newBalance, error: createError } = await supabase
+          .from('leave_balances')
+          .insert({
+            employee_id: employeeId,
+            used_casual_leaves: 0,
+            used_sick_leaves: 0,
+          })
+          .select()
+          .single();
 
-        // Check if enough balance is available
-        if (leaveData.leave_type === 'sick' && balance.sick_leave < requestedDays) {
-            throw new Error('Insufficient sick leave balance');
-        }
-        if (leaveData.leave_type === 'casual' && balance.casual_leave < requestedDays) {
-            throw new Error('Insufficient casual leave balance');
-        }
+        if (createError) throw createError;
+        return newBalance;
+      } catch (insertError) {
+        console.error('❌ Error creating default leave balance:', insertError);
+        throw insertError;
+      }
+    }
 
-        // Remove the user object and document before inserting to database
-        const { user, document, ...cleanLeaveData } = leaveData;
+    return data;
+  },
 
-        // Map the data to match the updated schema
-        const leaveRecord = {
-            employee_id: cleanLeaveData.employee_id,
-            leave_type: cleanLeaveData.leave_type,
-            start_date: cleanLeaveData.start_date,
-            end_date: cleanLeaveData.end_date,
-            reason: cleanLeaveData.reason,
-            subject: cleanLeaveData.subject,
-            status: cleanLeaveData.status || 'pending',
-            created_at: new Date().toISOString()
-        };
+  async createLeaveRequest(leaveData) {
+    console.log('🏖️ Creating leave request with data:', leaveData);
 
-        // Handle document upload if provided
-        if (document) {
-          // console.log('📎 Processing document upload for leave request');
-          
-          try {
-            // Use the enhanced uploadLeaveDocument function
-            const documentMetadata = await leaveApi.uploadLeaveDocument(document, cleanLeaveData.employee_id);
-            
-            if (documentMetadata) {
-              leaveRecord.has_documentation = true;
-              leaveRecord.document_url = documentMetadata.publicUrl;
-              leaveRecord.document_name = documentMetadata.fileName;
-              leaveRecord.document_type = documentMetadata.fileType;
-              leaveRecord.document_size = documentMetadata.fileSize;
-              leaveRecord.uploaded_at = documentMetadata.uploadedAt;
-              
-              // console.log('✅ Document metadata added to leave record:', {
-              //   hasDocumentation: leaveRecord.has_documentation,
-              //   documentName: leaveRecord.document_name,
-              //   documentSize: leaveRecord.document_size,
-              //   documentType: leaveRecord.document_type
-              // });
-            }
-          } catch (uploadError) {
-            console.error('❌ Error handling document upload:', uploadError);
-            // For now, continue without the document but log the error
-            // In production, you might want to fail the entire request
-            console.warn('⚠️ Continuing leave request creation without document due to upload error');
-          }
-        }
+    // Ensure we have employee_id
+    if (!leaveData.employee_id && leaveData.user) {
+      try {
+        const employee = await employeeApi.getEmployeeByUser(leaveData.user);
+        leaveData.employee_id = employee.employee_id || employee.id;
+        leaveData.employee_name =
+          employee.name ||
+          `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
+      } catch (error) {
+        console.error('⚠️ Could not fetch employee_id:', error.message);
+      }
+    }
 
-        // If balance is sufficient, create leave request
-        const { data, error } = await supabase
-            .from('leave_requests')
-            .insert([leaveRecord])
-            .select();
+    // First, check leave balance using employee_id
+    const balance = await this.getLeaveBalance(leaveData.employee_id);
+    const requestedDays = calculateLeaveDays(leaveData.start_date, leaveData.end_date);
 
-        if (error) throw error;
+    // Check if enough balance is available
+    if (leaveData.leave_type === 'sick' && balance.sick_leave < requestedDays) {
+      throw new Error('Insufficient sick leave balance');
+    }
+    if (leaveData.leave_type === 'casual' && balance.casual_leave < requestedDays) {
+      throw new Error('Insufficient casual leave balance');
+    }
 
-        // Update leave balance using employee_id
-        await this.updateLeaveBalance(
-            leaveData.employee_id,
-            leaveData.leave_type,
-            balance[`${leaveData.leave_type}_leave`] - requestedDays
+    // Remove the user object and document before inserting to database
+    const { user, document, ...cleanLeaveData } = leaveData;
+
+    // Map the data to match the updated schema
+    const leaveRecord = {
+      employee_id: cleanLeaveData.employee_id,
+      leave_type: cleanLeaveData.leave_type,
+      start_date: cleanLeaveData.start_date,
+      end_date: cleanLeaveData.end_date,
+      reason: cleanLeaveData.reason,
+      subject: cleanLeaveData.subject,
+      status: cleanLeaveData.status || 'pending',
+      created_at: new Date().toISOString(),
+    };
+
+    // Handle document upload if provided
+    if (document) {
+      try {
+        const documentMetadata = await leaveApi.uploadLeaveDocument(
+          document,
+          cleanLeaveData.employee_id
         );
 
-        // console.log('✅ Leave request created successfully:', data[0]);
-        return data[0];
-    },
+        if (documentMetadata) {
+          leaveRecord.has_documentation = true;
+          leaveRecord.document_url = documentMetadata.publicUrl;
+          leaveRecord.document_name = documentMetadata.fileName;
+          leaveRecord.document_type = documentMetadata.fileType;
+          leaveRecord.document_size = documentMetadata.fileSize;
+          leaveRecord.uploaded_at = documentMetadata.uploadedAt;
+        }
+      } catch (uploadError) {
+        console.error('❌ Error handling document upload:', uploadError);
+        console.warn('⚠️ Continuing leave request creation without document');
+      }
+    }
 
-    async updateLeaveBalance(employeeId, leaveType, newBalance) {
-        const updateData = {
-            [`${leaveType}_leave`]: newBalance,
-            updated_at: new Date().toISOString()
-        };
+    // If balance is sufficient, create leave request
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .insert([leaveRecord])
+      .select();
 
-        const { error } = await supabase
-            .from('leave_balances')
-            .update(updateData)
-            .eq('employee_id', employeeId);
+    if (error) throw error;
 
-        if (error) throw error;
-    },
+    // Update leave balance using employee_id
+    await this.updateLeaveBalance(
+      leaveData.employee_id,
+      leaveData.leave_type,
+      balance[`${leaveData.leave_type}_leave`] - requestedDays
+    );
 
-    async getLeaveRequests(employeeId) {
-        const { data, error } = await supabase
-            .from('leave_requests')
-            .select('*')
-            .eq('employee_id', employeeId)
-            .order('created_at', { ascending: false });
+    console.log('✅ Leave request created successfully:', data[0]);
+    return data[0];
+  },
 
-        if (error) throw error;
-        return data;
-    },
+  async updateLeaveBalance(employeeId, leaveType, newBalance) {
+    const updateData = {
+      [`used_${leaveType}_leaves`]: newBalance,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('leave_balances')
+      .update(updateData)
+      .eq('employee_id', employeeId);
+
+    if (error) throw error;
+  },
+
+  async getLeaveRequests(employeeId) {
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+
 
     // Check if employee has any active approved leave requests for today's date
     async checkActiveLeaveRequest(employeeId, userId) {
