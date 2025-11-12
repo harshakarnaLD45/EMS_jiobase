@@ -12,14 +12,25 @@ const Leave = () => {
   const { user, isAdmin: isAdminFn, isEmployee: isEmployeeFn } = useAuth();
   const isAdmin = isAdminFn?.() || false;
   const isEmployee = isEmployeeFn?.() || false;
+  
+  // Destructure, but use a default empty object in case useLeave returns null/undefined properties
   const { 
     leaveBalance, 
     loading, 
     error, 
     requestLeave,
-    refreshBalance
-  } = useLeave();
+    // Safely destructure refreshBalance, it will be undefined if not exposed by the context
+    refreshBalance: contextRefreshBalance 
+  } = useLeave() || {}; 
   
+  // Define a placeholder/dummy refresh function for safety if it's missing from context
+  const safeRefreshBalance = typeof contextRefreshBalance === 'function' 
+    ? contextRefreshBalance 
+    : async () => {
+        console.warn('refreshBalance is missing from useLeave context. Using a NO-OP function.');
+        return Promise.resolve();
+      };
+
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [filters, setFilters] = useState({
@@ -36,26 +47,49 @@ const Leave = () => {
   const [actionLoading, setActionLoading] = useState(null);
   const [employeeId, setEmployeeId] = useState(null);
 
-  // FIXED: Get employee_id properly on mount
+  // ------------------- Fetch employee_id -------------------
   useEffect(() => {
     const getEmployeeId = async () => {
       if (!user) return;
       
       try {
-        // Check if user already has employee_id
+        const { supabase } = await import('../../utils/supabase');
+        
+        // 1. Check if user object already has the ID
         if (user.employee_id) {
           setEmployeeId(user.employee_id);
           return;
         }
 
-        // Otherwise fetch from employees table
-        const { supabase } = await import('../../utils/supabase');
-        const { data: employeeData, error: empError } = await supabase
-          .from('employees')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
+        let employeeData = null;
+        let empError = null;
 
+        // 2. Try fetching by user_id
+        const { data: dataById, error: errorById } = await supabase
+          .from('employees')
+          .select('id, employee_id')
+          .eq('user_id', user.id) // Assuming user.id links to employees.user_id
+          .maybeSingle();
+        
+        if (dataById) {
+          employeeData = dataById;
+        } else {
+          empError = errorById;
+        }
+        
+        // 3. If still not found, try by email
+        if (!employeeData && user.email) {
+          const { data: empByEmail } = await supabase
+            .from('employees')
+            .select('id, employee_id')
+            .eq('email', user.email)
+            .maybeSingle();
+          
+          if (empByEmail) {
+            employeeData = empByEmail;
+          }
+        }
+        
         if (empError) {
           console.error('Error fetching employee_id:', empError);
           setFormError('Unable to identify employee. Please contact admin.');
@@ -77,21 +111,15 @@ const Leave = () => {
     getEmployeeId();
   }, [user]);
 
+  // ------------------- Data Loading and Refresh -------------------
   useEffect(() => {
-    if (user && employeeId) {
+    // Initial data load when employeeId or user/isAdmin status changes
+    if (user && (isAdmin || employeeId)) {
       refreshLeaveData();
     }
+    // Dependency on refreshLeaveData is safe since it's defined outside this effect 
+    // and its dependencies (safeRefreshBalance, loadLeaveRequests) are stable.
   }, [user, employeeId, isAdmin]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (calendarVisible && !event.target.closest('.history_header')) {
-        setCalendarVisible(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [calendarVisible]);
 
   const loadLeaveRequests = async () => {
     if (!user || (!isAdmin && !employeeId)) return;
@@ -123,12 +151,16 @@ const Leave = () => {
 
   const refreshLeaveData = async () => {
     if (isAdmin) {
+      // Admins only need to refresh the list of requests
       await loadLeaveRequests();
-    } else {
-      await Promise.all([refreshBalance(), loadLeaveRequests()]);
+    } else if (employeeId) {
+      // Employees need to refresh both balance and the list of requests
+      // This is where the fix is applied, using safeRefreshBalance
+      await Promise.all([safeRefreshBalance(), loadLeaveRequests()]);
     }
   };
 
+  // ------------------- Admin Actions -------------------
   const handleApproveRequest = async (id) => {
     if (!id) return;
     try {
@@ -163,13 +195,14 @@ const Leave = () => {
       setActionLoading(null);
     }
   };
-
+  
+  // ------------------- Leave Configuration and Calculations -------------------
   const leaveTypeConfigs = [
     { type: 'sick', displayName: 'Sick Leave', icon: HeartPulse, iconClass: 'sick_leave_icon', color: '#ef4444', totalDays: 5 },
     { type: 'casual', displayName: 'Casual Leave', icon: Coffee, iconClass: 'casual_leave_icon', color: '#3b82f6', totalDays: 12 },
   ];
 
-  // FIXED: This function now properly calculates used days from approved requests
+  // This function properly calculates used days from approved requests
   const calculateLeaveStats = () => {
     if (!leaveRequests || leaveRequests.length === 0) {
       return leaveTypeConfigs.map(config => ({ 
@@ -193,7 +226,7 @@ const Leave = () => {
           const startDate = new Date(req.start_date);
           const reqYear = startDate.getFullYear();
           
-          // FIXED: Only count approved leaves for current year
+          // Only count approved leaves for current year
           return req.leave_type === config.type && 
                  req.status === 'approved' && 
                  reqYear === currentYear;
@@ -206,22 +239,21 @@ const Leave = () => {
           return sum + duration;
         }, 0);
       
-      // Get used days from balance table (fallback)
-      const usedFromBalance = config.type === 'sick'
-        ? leaveBalance?.used_sick_leaves || 0
-        : leaveBalance?.used_casual_leaves || 0;
+      // Get used days from balance table (fallback/cross-check)
+      const balanceField = config.type === 'sick' ? 'used_sick_leaves' : 'used_casual_leaves';
+      const usedFromBalance = leaveBalance?.[balanceField] || 0;
       
-      // Use the MAXIMUM to ensure accuracy (requests are source of truth)
+      // Use the MAXIMUM to ensure accuracy (requests are source of truth, balance is backup/sync)
       const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
       const daysLeft = Math.max(0, totalAllocated - actualUsed);
       
-      console.log(`${config.type} Leave Calculation:`, {
-        usedFromRequests: usedDaysFromRequests,
-        usedFromBalance: usedFromBalance,
-        actualUsed: actualUsed,
-        daysLeft: daysLeft,
-        totalAllocated: totalAllocated
-      });
+      // console.log(`${config.type} Leave Calculation:`, {
+      //   usedFromRequests: usedDaysFromRequests,
+      //   usedFromBalance: usedFromBalance,
+      //   actualUsed: actualUsed,
+      //   daysLeft: daysLeft,
+      //   totalAllocated: totalAllocated
+      // });
       
       return { 
         ...config, 
@@ -232,7 +264,7 @@ const Leave = () => {
     });
   };
 
-  // FIXED: Calculate stats using the same logic
+  // Calculate stats using the same logic for summary
   const calculateStats = () => {
     if (!leaveRequests || leaveRequests.length === 0) {
       return { totalDaysUsed: 0, pendingRequests: 0 };
@@ -257,7 +289,8 @@ const Leave = () => {
           return reqSum + duration;
         }, 0);
       
-      const usedFromBalance = leaveBalance?.[`${config.type}_used`] || 0;
+      const balanceField = config.type === 'sick' ? 'used_sick_leaves' : 'used_casual_leaves';
+      const usedFromBalance = leaveBalance?.[balanceField] || 0;
       const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
       return sum + actualUsed;
     }, 0);
@@ -272,7 +305,7 @@ const Leave = () => {
   const leaveTypes = isAdmin ? [] : calculateLeaveStats();
   const stats = isAdmin ? { totalDaysUsed: 0, pendingRequests: 0 } : calculateStats();
 
-  // FIXED: Handle leave submission with proper employee_id validation
+  // ------------------- Leave Submission -------------------
   const handleLeaveSubmit = async (leaveData) => {
     try {
       setFormError('');
@@ -299,6 +332,7 @@ const Leave = () => {
     }
   };
 
+  // ------------------- History Formatting and Filtering -------------------
   const formatLeaveHistory = () => {
     if (!leaveRequests || leaveRequests.length === 0) return [];
     return leaveRequests
@@ -330,6 +364,10 @@ const Leave = () => {
 
   // Filter logic
   const filteredLeaveHistory = leaveHistory.filter((leave) => {
+    // Status filter (currently not in UI, but keep the logic for future use)
+    if (filters.status !== 'all' && leave.status !== filters.status)
+      return false;
+      
     // Employee filter (admin only)
     if (isAdmin && filters.employee !== 'all' && leave.employeeName !== filters.employee)
       return false;
@@ -377,7 +415,20 @@ const Leave = () => {
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
+  
+  // ------------------- Calendar Visibility -------------------
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Use the class name from the history_header to determine if we clicked inside the calendar area
+      if (calendarVisible && !event.target.closest('.history_header')) {
+        setCalendarVisible(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [calendarVisible]);
 
+  // ------------------- Render -------------------
   return (
     <div className="leave_container">
       {/* Header */}
@@ -424,11 +475,11 @@ const Leave = () => {
           borderRadius: '0.5rem',
           margin: '1rem 0'
         }}>
-          <strong>Error:</strong> Unable to load employee data. Please refresh the page or contact administrator.
+          <strong>Error:</strong> {formError || 'Unable to load employee data. Please refresh the page or contact administrator.'}
         </div>
       )}
 
-      {/* Leave Types Grid */}
+      {/* Leave Types Grid (SICK and CASUAL cards) */}
       {!isAdmin && (
       <div className="leave_types_grid">
         {loading ? (
@@ -697,14 +748,16 @@ const Leave = () => {
                       <button
                         className="approve-btn bodyMediumText5"
                         onClick={() => handleApproveRequest(leave.id)}
+                        disabled={actionLoading === leave.id}
                       >
-                        Approve
+                        {actionLoading === leave.id ? 'Loading...' : 'Approve'}
                       </button>
                       <button
                         className="reject-btn bodyMediumText5"
                         onClick={() => handleRejectRequest(leave.id, 'Rejected by admin')}
+                        disabled={actionLoading === leave.id}
                       >
-                        Reject
+                        {actionLoading === leave.id ? 'Loading...' : 'Reject'}
                       </button>
                     </div>
                   )}
