@@ -431,4 +431,7 @@ body {
     padding: 10px 20px !important;
   }
 }
-
+html, body, #root{
+     overscroll-behavior: none;
+    
+}

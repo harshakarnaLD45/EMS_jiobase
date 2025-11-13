@@ -944,7 +944,7 @@ export default function Attendance() {
                                     })}
                                 </div>
 
-                                <div style={{
+                              <div className="attendance-legend-container" style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '24px',
@@ -959,7 +959,7 @@ export default function Attendance() {
                                             backgroundColor: '#dcfce7',
                                             border: '1px solid #4ade80'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Present </span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Present</span>
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -970,8 +970,9 @@ export default function Attendance() {
                                             backgroundColor: '#fee2e2',
                                             border: '1px solid #f87171'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave </span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave</span>
                                     </div>
+
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
                                             width: '16px',
@@ -980,8 +981,9 @@ export default function Attendance() {
                                             backgroundColor: '#e3d2f7ff',
                                             border: '1px solid #a855f7'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Half-day </span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Half-day</span>
                                     </div>
+
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
                                             width: '16px',
@@ -990,7 +992,9 @@ export default function Attendance() {
                                             backgroundColor: '#d6d7d8ff',
                                             border: '1px solid #cccdcfff'
                                         }} />
-                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Weekend </span>
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Weekend</span>
+                                    </div>
+
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
                                             width: '16px',
@@ -1003,7 +1007,7 @@ export default function Attendance() {
                                     </div>
                                 </div>
                                 </div>
-                            </div>
+                           
 
                             {/* Info modal / popup for a selected day */}
                             {infoDay !== null && (() => {

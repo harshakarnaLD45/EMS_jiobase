@@ -1,10 +1,358 @@
-.css-1tktgsa-MuiPaper-root-MuiPopover-paper-MuiMenu-paper{
+/* Existing MUI Menu positioning */
+.css-1tktgsa-MuiPaper-root-MuiPopover-paper-MuiMenu-paper {
     left: 20px !important;
     top: auto !important;
     bottom: 70px !important;
 }
-.css-12oazvf-MuiPaper-root-MuiPopover-paper-MuiMenu-paper{
+
+.css-12oazvf-MuiPaper-root-MuiPopover-paper-MuiMenu-paper {
     left: 250px !important;
     top: auto !important;
     bottom: 140px !important;
+}
+
+/* ===========================
+   CALENDAR + LEGEND FIXES
+   (Put these near the bottom of the file)
+   =========================== */
+
+/* Ensure the calendar area uses grid and 7 equal columns */
+div[style*="grid-template-columns: repeat(7, 1fr)"] {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  gap: 8px !important;                 /* default gap - reduced on small screens below */
+  align-items: stretch !important;
+  justify-items: stretch !important;
+  /* Force each row to follow content but cells will keep square using aspect-ratio on children */
+  grid-auto-rows: 1fr !important;
+  box-sizing: border-box !important;
+}
+
+/* Day header (Sun..Sat) - consistent sizing */
+div[style*="grid-template-columns: repeat(7, 1fr)"] > div[style*="text-align: center"] {
+  box-sizing: border-box !important;
+  padding: 6px 2px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+/* Calendar day cells - strong square enforcement and consistent spacing.
+   We target inline-styled cells (aspectRatio & minHeight) you used in JSX */
+div[style*="aspect-ratio: 1"][style*="minHeight: 40px"],
+div[style*="aspect-ratio: 1"][style*="min-height: 40px"] {
+  aspect-ratio: 1 / 1 !important;      /* ensure square shape */
+  width: 100% !important;              /* occupy the grid column width */
+  box-sizing: border-box !important;
+  min-height: 0 !important;            /* prevent older inline min-height from forcing layout */
+  padding: 6px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  overflow: hidden !important;
+}
+
+/* The day container's inner content (numbers / small dots) should not overflow */
+div[style*="aspect-ratio: 1"] > span,
+div[style*="aspect-ratio: 1"] > button,
+div[style*="aspect-ratio: 1"] > div {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+}
+
+/* If a grid has explicit gap set inline, ensure children don't overflow horizontally */
+div[style*="grid-template-columns: repeat(7, 1fr)"] > div {
+  min-width: 0 !important;
+}
+
+/* Calendar grid: reduce gap if container is narrow to avoid overflow */
+@media (max-width: 480px) {
+  div[style*="grid-template-columns: repeat(7, 1fr)"] {
+    gap: 6px !important;
+  }
+
+  div[style*="aspect-ratio: 1"][style*="minHeight: 40px"] {
+    padding: 3px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    height: 36px !important;
+    font-size: 10px !important;
+  }
+
+  /* Reduce day number size */
+  div[style*="aspect-ratio: 1"] span[style*="fontSize: '14px'"],
+  div[style*="aspect-ratio: 1"] span[style*="font-size: 14px"],
+  div[style*="aspect-ratio: 1"] span[style*="font-size: 14px;"] {
+    font-size: 12px !important;
+  }
+
+  /* Make sure the calendar container won't allow horizontal overflow */
+  div[style*="minHeight: 100vh"] {
+    overflow-x: hidden !important;
+  }
+}
+
+/* Very small screens (<=360px) make squares slightly smaller */
+@media (max-width: 360px) {
+  div[style*="grid-template-columns: repeat(7, 1fr)"] {
+    gap: 4px !important;
+  }
+
+  div[style*="aspect-ratio: 1"][style*="minHeight: 40px"] {
+    min-height: 32px !important;
+    max-height: 32px !important;
+    height: 32px !important;
+    padding: 2px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* Prevent the right-hand panel / card gutter from overlapping the calendar:
+   if your page layout has a card side panel, ensure the calendar card has padding-right. */
+.card, .Card, div[class*="Card"] {
+  box-sizing: border-box;
+}
+
+/* If the calendar sits inside a horizontally scrollable container, limit its width */
+div[style*="grid-template-columns: repeat(7, 1fr)"] {
+  max-width: 100% !important;
+}
+
+/* =========================================================
+   Attendance Legend (explicit, isolated selectors)
+   ========================================================= */
+
+/* Base legend container (you have .attendance-legend-container in JSX) */
+.attendance-legend-container,
+div[style*="paddingTop: 16px"][style*="borderTop: 1px solid"] {
+  /* Keep both options so .attendance-legend-container (class) or the inline-styled wrapper both match */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 24px !important;
+  flex-wrap: wrap !important;
+  padding-top: 16px !important;
+  border-top: 1px solid var(--border) !important;
+  box-sizing: border-box !important;
+}
+
+/* Each legend item */
+.attendance-legend-container > div,
+div[style*="paddingTop: 16px"] > div[style*="display: flex"][style*="align-items: center"] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* Legend label text */
+.attendance-legend-container span,
+div[style*="paddingTop: 16px"] span[style*="fontSize: 14px"] {
+  font-size: 14px !important;
+  color: var(--muted-foreground) !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* Small color box in legend */
+.attendance-legend-container div[style*="width: 16px"][style*="height: 16px"],
+div[style*="paddingTop: 16px"] div[style*="width: 16px"][style*="height: 16px"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  border-radius: 4px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Responsive legend: 2 columns on mobile, 1 on very small screens */
+@media (max-width: 480px) {
+  .attendance-legend-container,
+  div[style*="paddingTop: 16px"][style*="borderTop: 1px solid"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px 12px !important;
+    align-items: start !important;
+    justify-items: start !important;
+    padding-top: 10px !important;
+  }
+
+  .attendance-legend-container span,
+  div[style*="paddingTop: 16px"] span[style*="fontSize: 14px"] {
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  .attendance-legend-container div[style*="width: 16px"][style*="height: 16px"],
+  div[style*="paddingTop: 16px"] div[style*="width: 16px"][style*="height: 16px"] {
+    width: 12px !important;
+    height: 12px !important;
+    min-width: 12px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .attendance-legend-container,
+  div[style*="paddingTop: 16px"][style*="borderTop: 1px solid"] {
+    grid-template-columns: 1fr !important;  /* one item per row on tiny screens */
+    gap: 6px !important;
+    padding: 6px 4px !important;
+  }
+
+  .attendance-legend-container span,
+  div[style*="paddingTop: 16px"] span[style*="fontSize: 14px"] {
+    font-size: 11px !important;
+  }
+
+  .attendance-legend-container div[style*="width: 16px"][style*="height: 16px"],
+  div[style*="paddingTop: 16px"] div[style*="width: 16px"][style*="height: 16px"] {
+    width: 10px !important;
+    height: 10px !important;
+    min-width: 10px !important;
+  }
+}
+
+/* Keep other mobile rules below (consolidated) */
+
+/* =========================================================
+   General Mobile rules (consolidated version of your existing mobile rules)
+   ========================================================= */
+
+/* Mobile Responsiveness for <=480px devices */
+@media (max-width: 480px) {
+    /* Fix page header to stack vertically */
+    div[style*="justify-content: space-between"][style*="align-items: flex-start"] {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    /* Title and badge container */
+    div[style*="justify-content: space-between"] > div:first-child {
+        width: 100% !important;
+    }
+
+    /* Make title text responsive */
+    div[style*="justify-content: space-between"] h1 {
+        font-size: 22px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Subtitle text */
+    div[style*="justify-content: space-between"] p {
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Fix header controls - NO STACKING, keep horizontal - APPLIES TO BOTH ADMIN AND EMPLOYEE */
+    div[style*="display: flex"][style*="gap: 12px"][style*="align-items: center"] {
+        flex-direction: row !important;
+        gap: 6px !important;
+        width: 100% !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-start !important;
+    }
+
+    /* Employee filter - compact on mobile (Admin only) - using more specific selector */
+    button[role="combobox"][style*="minWidth"]:first-of-type {
+        min-width: 100px !important;
+        width: 100px !important;
+        max-width: 100px !important;
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+
+    /* Month selector - FIXED WIDTH for both admin and employee views */
+    button[role="combobox"] {
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+    
+    /* Target month selector specifically by width style */
+    button[role="combobox"][style*="width: 140px"],
+    div[style*="width: 140px"] button[role="combobox"] {
+        width: 110px !important;
+        min-width: 110px !important;
+        max-width: 110px !important;
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+
+    /* Year selector - FIXED WIDTH for both admin and employee views */
+    button[role="combobox"][style*="width: 100px"],
+    div[style*="width: 100px"] button[role="combobox"] {
+        width: 70px !important;
+        min-width: 70px !important;
+        max-width: 70px !important;
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+
+    /* Alternative selector for month/year dropdowns by position */
+    div[style*="display: flex"][style*="gap: 12px"][style*="align-items: center"] > div:last-child button[role="combobox"],
+    div[style*="display: flex"][style*="gap: 12px"][style*="align-items: center"] > div:nth-last-child(2) button[role="combobox"] {
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+    }
+
+    /* Badge adjustments */
+    span[class*="inline-flex"] {
+        font-size: 10px !important;
+        padding: 2px 6px !important;
+    }
+
+    /* Stats card content - compact layout */
+    div[style*="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr))"] > div > div {
+        padding: 14px !important;
+    }
+
+    /* Card content general padding */
+    div[class*="CardContent"] {
+        padding: 12px !important;
+    }
+
+    /* Calendar section title */
+    h3[style*="fontSize: 20px"] {
+        font-size: 16px !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Calendar description text */
+    p[style*="fontSize: 14px"] {
+        font-size: 11px !important;
+    }
+
+    /* Tab triggers */
+    button[role="tab"] {
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+    }
+
+    /* Tab icons */
+    button[role="tab"] svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+}
+
+/* Tablet breakpoint (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+    /* Stats cards - 2 columns on tablet */
+    .attendance-stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Header controls - keep horizontal but adjust spacing */
+    .attendance-header-controls {
+        gap: 0.5rem !important;
+    }
+
+    button[role="combobox"] {
+        min-width: 120px !important;
+    }
 }
