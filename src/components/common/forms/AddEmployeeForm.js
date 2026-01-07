@@ -363,7 +363,7 @@ const AddEmployeeForm = ({ mode = 'add', employeeData = null, onClose, onSuccess
 
                 </CardContent>
                 
-                <CardFooter className="flex justify-end space-x-2">
+                <CardFooter className="flex justify-end space-x-2 pt-8">
                     <Button
                         type="button"
                         variant="outline"

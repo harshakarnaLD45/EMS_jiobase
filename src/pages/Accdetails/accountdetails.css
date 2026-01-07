@@ -1,0 +1,295 @@
+.account-details-container {
+    padding: 1.5rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.account-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.account-details-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.account-details-form {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+}
+
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.form-section:last-child {
+    margin-bottom: 0;
+}
+
+.form-section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-section-title svg {
+    color: #3b82f6;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 640px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.form-group.full-width {
+    grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+    .form-group.full-width {
+        grid-column: span 1;
+    }
+}
+
+.form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.form-label .required {
+    color: #ef4444;
+    margin-left: 2px;
+}
+
+.form-input {
+    padding: 0.625rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: all 0.15s ease;
+    outline: none;
+}
+
+.form-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input:disabled {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+.form-input.readonly {
+    background-color: #f9fafb;
+    border-style: dashed;
+}
+
+.form-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.btn-primary {
+    padding: 0.625rem 1.25rem;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.15s ease;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+}
+
+.btn-primary:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    padding: 0.625rem 1.25rem;
+    background-color: white;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.btn-secondary:hover {
+    background-color: #f9fafb;
+}
+
+.success-message {
+    background-color: #ecfdf5;
+    border: 1px solid #10b981;
+    color: #065f46;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.error-message {
+    background-color: #fef2f2;
+    border: 1px solid #ef4444;
+    color: #991b1b;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+}
+
+/* Admin Modal Styles */
+.account-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.account-modal {
+    background: white;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.account-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.account-modal-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.account-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    color: #6b7280;
+}
+
+.account-modal-close:hover {
+    background-color: #f3f4f6;
+}
+
+.account-modal-body {
+    padding: 1.5rem;
+}
+
+.account-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.account-detail-row:last-child {
+    border-bottom: none;
+}
+
+.account-detail-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.account-detail-value {
+    font-size: 0.875rem;
+    color: #111827;
+    font-weight: 500;
+    text-align: right;
+}
+
+.account-detail-value.not-provided {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.account-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.375rem;
+    border-radius: 0.375rem;
+    color: #6b7280;
+    transition: all 0.15s ease;
+}
+
+.account-icon-btn:hover {
+    background-color: #f3f4f6;
+    color: #3b82f6;
+}

@@ -119,9 +119,9 @@ export function EmployeeProvider({ children }) {
     const getPositionOptions = (department) => {
         const positionMap = {
             'Administration': ['General Manager', 'IT Manager'],
-            'Development': ['Front End Developer', 'Back End Developer', 'Application Developer', 'Web Developer', 'AI Developer'],
+            'Development': ['Front End Developer', 'Back End Developer', 'Application Developer', 'Web Developer', 'AI Developer', 'PLC Programmer', 'Embedded System Engineer'],
             'Design': ['UX/UI Designer'],
-            'Interns': ['Front End Developer', 'Back End Developer', 'Application Developer', 'Web Developer', 'AI Developer', 'UX/UI Designer']
+            'Interns': ['Front End Developer', 'Back End Developer', 'Application Developer', 'Web Developer', 'AI Developer', 'UX/UI Designer', 'PLC Programmer', 'Embedded System Engineer']
         };
         return positionMap[department] || [];
     };

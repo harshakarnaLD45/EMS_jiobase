@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, AlertTriangle, UserPlus, FileText, RefreshCw } from 'lucide-react';
-import { adminApi, leaveApi } from '../../utils/supabase';
+import { Users, Calendar, AlertTriangle, UserPlus, FileText, RefreshCw, X, Info } from 'lucide-react';
+import { Tooltip } from '@mui/material';
+import { adminApi, leaveApi, timesheetComplianceApi, employeeApi } from '../../utils/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { AddEmployeeForm } from '../../components';
 import './AdminDashboard.css';
@@ -16,6 +17,8 @@ const AdminDashboard = () => {
     });
     const [recentActivity, setRecentActivity] = useState([]);
     const [pendingTimesheets, setPendingTimesheets] = useState([]);
+    const [timesheetCompliance, setTimesheetCompliance] = useState({ warnings: [], autoLeaves: [] });
+    const [dismissedAlerts, setDismissedAlerts] = useState({ warnings: [], autoLeaves: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { user } = useAuth();
@@ -323,6 +326,75 @@ const AdminDashboard = () => {
             //console.log('🏁 Final verification:');
             //console.log('   - Stats pending timesheets:', stats.pendingTimesheets);
             //console.log('   - Actual pending timesheets being set:', enrichedTimesheets.length);
+
+            // Fetch timesheet compliance data for all employees and auto-process leaves
+            try {
+                const employees = await employeeApi.getEmployees();
+                const allWarnings = [];
+                const allAutoLeaves = [];
+                const processedLeaves = [];
+
+                for (const employee of employees) {
+                    try {
+                        const employeeId = employee.employee_id || employee.id;
+                        const complianceResult = await timesheetComplianceApi.checkMissingTimesheets(employeeId);
+                        
+                        // Add warnings with employee info
+                        if (complianceResult.warnings && complianceResult.warnings.length > 0) {
+                            complianceResult.warnings.forEach(warning => {
+                                allWarnings.push({
+                                    employee_id: employeeId,
+                                    employee_name: employee.name,
+                                    date: warning.date,
+                                    message: warning.message
+                                });
+                            });
+                        }
+
+                        // Automatically process auto-leaves immediately (don't wait for employee login)
+                        if (complianceResult.autoLeaveRequired && complianceResult.autoLeaveRequired.length > 0) {
+                            for (const autoLeave of complianceResult.autoLeaveRequired) {
+                                try {
+                                    // Create the auto-leave immediately
+                                    const createdLeave = await timesheetComplianceApi.createAutoLeaveForMissingTimesheet(employeeId, autoLeave.date);
+                                    processedLeaves.push({
+                                        employee_id: employeeId,
+                                        employee_name: employee.name,
+                                        date: autoLeave.date,
+                                        status: 'deducted',
+                                        message: `Leave deducted for ${autoLeave.date}`
+                                    });
+                                    console.log(`✅ Auto-leave processed for ${employee.name} on ${autoLeave.date}`);
+                                } catch (leaveError) {
+                                    // If leave already exists, just add to display list
+                                    allAutoLeaves.push({
+                                        employee_id: employeeId,
+                                        employee_name: employee.name,
+                                        date: autoLeave.date,
+                                        message: autoLeave.message,
+                                        status: 'already_processed'
+                                    });
+                                }
+                            }
+                        }
+                    } catch (complianceError) {
+                        console.error(`⚠️ Error checking compliance for employee ${employee.name}:`, complianceError);
+                    }
+                }
+
+                setTimesheetCompliance({
+                    warnings: allWarnings,
+                    autoLeaves: [...allAutoLeaves, ...processedLeaves]
+                });
+
+                console.log('📋 Timesheet compliance loaded:', {
+                    warnings: allWarnings.length,
+                    autoLeaves: allAutoLeaves.length,
+                    processedLeaves: processedLeaves.length
+                });
+            } catch (complianceError) {
+                console.error('❌ Error loading timesheet compliance:', complianceError);
+            }
 
             setDashboardStats({
                 totalEmployees: {
@@ -870,6 +942,8 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
+           
+
             {/* Pending Timesheets */}
             <div className="admin-section">
                 <h2 className="section-title bodyRegularText3">Pending Timesheets</h2>
@@ -968,38 +1042,70 @@ const AdminDashboard = () => {
                                                         );
                                                     }
 
-                                                    return tasks.map((task, index) => (
-                                                        <div key={task.id || index} className="task_bubble" style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'space-between',
-                                                            padding: '0.25rem 0.5rem',
-                                                            backgroundColor: '#eff6ff',
-                                                            borderRadius: '0.375rem',
-                                                            border: '1px solid #bfdbfe',
-                                                            fontSize: '0.75rem',
-                                                            minWidth: '120px',
-                                                            gap: '0.5rem'
-                                                        }}>
-                                                            <span className="task_text" style={{
-                                                                color: '#1e40af',
-                                                                flex: 1,
-                                                                minWidth: 0,
-                                                                overflow: 'hidden',
-                                                                textOverflow: 'ellipsis',
-                                                                whiteSpace: 'nowrap'
+                                                    return tasks.map((task, index) => {
+                                                        const hasDescription = task.description && task.description.trim() !== '';
+                                                        return (
+                                                            <div key={task.id || index} className="task_bubble" style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'space-between',
+                                                                padding: '0.25rem 0.5rem',
+                                                                backgroundColor: '#eff6ff',
+                                                                borderRadius: '0.375rem',
+                                                                border: '1px solid #bfdbfe',
+                                                                fontSize: '0.75rem',
+                                                                minWidth: '120px',
+                                                                gap: '0.5rem'
                                                             }}>
-                                                                {task.description || task.taskTitle || task.task || 'No description'}
-                                                            </span>
-                                                            <span className="task_duration" style={{
-                                                                color: '#1d4ed8',
-                                                                fontWeight: '500',
-                                                                flexShrink: 0
-                                                            }}>
-                                                                {task.hours || task.timeSpent || 0}h
-                                                            </span>
-                                                        </div>
-                                                    ));
+                                                                <span className="task_text" style={{
+                                                                    color: '#1e40af',
+                                                                    flex: 1,
+                                                                    minWidth: 0,
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}>
+                                                                    {task.taskTitle || task.task || 'No title'}
+                                                                </span>
+                                                                <span className="task_duration" style={{
+                                                                    color: '#1d4ed8',
+                                                                    fontWeight: '500',
+                                                                    flexShrink: 0
+                                                                }}>
+                                                                    {task.timeSpent || (task.hours ? `${task.hours}h` : (task.minutes ? `${task.minutes}min` : '0min'))}
+                                                                </span>
+                                                                {hasDescription && (
+                                                                    <Tooltip 
+                                                                        title={task.description}
+                                                                        arrow
+                                                                        placement="top"
+                                                                        slotProps={{
+                                                                            tooltip: {
+                                                                                sx: {
+                                                                                    bgcolor: '#1f2937',
+                                                                                    fontSize: '12px',
+                                                                                    maxWidth: '250px',
+                                                                                    padding: '8px 12px',
+                                                                                    '& .MuiTooltip-arrow': {
+                                                                                        color: '#1f2937',
+                                                                                    },
+                                                                                },
+                                                                            },
+                                                                        }}
+                                                                    >
+                                                                        <div style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            cursor: 'pointer',
+                                                                            marginLeft: '4px'
+                                                                        }}>
+                                                                            <Info size={12} style={{ color: '#3b82f6' }} />
+                                                                        </div>
+                                                                    </Tooltip>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    });
                                                 } catch (error) {
                                                     console.warn('Error parsing tasks for timesheet:', timesheet.id, error);
                                                     return (
@@ -1064,6 +1170,129 @@ const AdminDashboard = () => {
                     )}
                 </div>
             </div>
+
+             {/* Timesheet  Alerts */}
+            {(timesheetCompliance.warnings.filter(w => !dismissedAlerts.warnings.includes(`${w.employee_id}-${w.date}`)).length > 0 || 
+              timesheetCompliance.autoLeaves.filter(a => !dismissedAlerts.autoLeaves.includes(`${a.employee_id}-${a.date}`)).length > 0) && (
+                <div className="admin-section">
+                    <h2 className="section-title bodyRegularText3">Timesheet  Alerts</h2>
+                    <div className="leave-requests">
+                        {/* Warnings - Day +1 */}
+                        {timesheetCompliance.warnings.filter(w => !dismissedAlerts.warnings.includes(`${w.employee_id}-${w.date}`)).map((warning, idx) => (
+                            <div key={`warning-${idx}`} className="leave-request-card" style={{
+                                backgroundColor: '#fffbeb',
+                                borderLeft: '4px solid #f59e0b',
+                                position: 'relative'
+                            }}>
+                                <button
+                                    onClick={() => setDismissedAlerts(prev => ({
+                                        ...prev,
+                                        warnings: [...prev.warnings, `${warning.employee_id}-${warning.date}`]
+                                    }))}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '0.5rem',
+                                        right: '0.5rem',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        padding: '0.25rem',
+                                        borderRadius: '0.25rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef3c7'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    title="Dismiss alert"
+                                >
+                                    <X size={16} style={{ color: '#92400e' }} />
+                                </button>
+                                <div className="request-info">
+                                    <div className="employee-name bodyMediumText3" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
+                                        {warning.employee_name}
+                                    </div>
+                                    <div className="leave-details">
+                                        {/* <span className="leave-type" style={{ color: '#92400e', backgroundColor: '#fef3c7' }}></span> */}
+                                        <span className="leave-date bodyRegularText5">
+                                            Missing timesheet for {new Date(warning.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                    </div>
+                                    {/* <div className="leave-reason bodyRegularText4" style={{
+                                        fontSize: '0.875rem',
+                                        color: '#78350f',
+                                        marginTop: '0.25rem'
+                                    }}>
+                                        {warning.message}
+                                    </div> */}
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Auto-Leave Deductions - Day +2 */}
+                        {timesheetCompliance.autoLeaves.filter(a => !dismissedAlerts.autoLeaves.includes(`${a.employee_id}-${a.date}`)).map((autoLeave, idx) => (
+                            <div key={`auto-leave-${idx}`} className="leave-request-card" style={{
+                                backgroundColor: '#fef2f2',
+                                borderLeft: '4px solid #ef4444',
+                                position: 'relative'
+                            }}>
+                                <button
+                                    onClick={() => setDismissedAlerts(prev => ({
+                                        ...prev,
+                                        autoLeaves: [...prev.autoLeaves, `${autoLeave.employee_id}-${autoLeave.date}`]
+                                    }))}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '0.5rem',
+                                        right: '0.5rem',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        padding: '0.25rem',
+                                        borderRadius: '0.25rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    title="Dismiss alert"
+                                >
+                                    <X size={16} style={{ color: '#991b1b' }} />
+                                </button>
+                                <div className="request-info">
+                                    <div className="employee-name bodyMediumText3" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <AlertTriangle size={18} style={{ color: '#ef4444' }} />
+                                        {autoLeave.employee_name}
+                                    </div>
+                                    <div className="leave-details">
+                                        <span className="leave-type" style={{ color: '#991b1b', backgroundColor: '#fecaca' }}></span>
+                                        <span className="leave-date bodyRegularText5">
+                                            Missing timesheet for {new Date(autoLeave.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                    </div>
+                                    <div className="leave-reason bodyRegularText4" style={{
+                                        fontSize: '0.875rem',
+                                        color: '#7f1d1d',
+                                        marginTop: '0.25rem',
+                                        fontWeight: '600'
+                                    }}>
+                                        {autoLeave.status === 'deducted' 
+                                            ? `Leave has been deducted for ${autoLeave.date}.`
+                                            : autoLeave.status === 'already_processed'
+                                            ? `Leave already deducted for ${autoLeave.date}.`
+                                            : `${autoLeave.message} - Leave has been deducted.`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Add Employee Dialog */}
             <Dialog.Root open={employeeDialogOpen} onOpenChange={setEmployeeDialogOpen}>

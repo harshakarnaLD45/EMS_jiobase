@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'; 
-import { Plus, Clock, Calendar, Eye, Edit2, Trash2, CheckCircle, TrendingUp, Clock4 } from 'lucide-react';
+import { Plus, Clock, Calendar, Eye, Edit2, Trash2, CheckCircle, TrendingUp, Clock4, Info } from 'lucide-react';
+import { Tooltip } from '@mui/material';
 import './timesheet.css';
 import * as Dialog from '@radix-ui/react-dialog';
 import { CircleCheckBig } from '../../components/custom_icons';
@@ -10,6 +11,28 @@ import '../../components/common/calender/CustomCalendar.css';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 
 import { TimesheetForm } from '../../components';
+
+// Helper function to format task time for display
+const formatTaskTime = (hours, minutes) => {
+    const h = parseInt(hours) || 0;
+    const m = parseInt(minutes) || 0;
+    if (h > 0 && m > 0) return `${h}h ${m}min`;
+    if (h > 0) return `${h}h`;
+    if (m > 0) return `${m}min`;
+    return '0min';
+};
+
+// Helper function to format total hours for display
+const formatTotalHours = (decimalHours) => {
+    const totalMinutes = Math.round(decimalHours * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h > 0 && m > 0) return `${h}h ${m}min`;
+    if (h > 0) return `${h}h`;
+    if (m > 0) return `${m}min`;
+    return '0min';
+};
+
 const Timesheet = () => {
     const [timesheetDialogOpen, setTimesheetDialogOpen] = useState(false);
     const [calendarVisible, setCalendarVisible] = useState(false);
@@ -82,14 +105,16 @@ const Timesheet = () => {
                         // Transform from database format to component format
                         parsedTasks = tasksJson.map((task, index) => ({
                             id: task.id || index + 1,
-                            description: task.taskTitle || task.description || 'No description',
-                            hours: parseFloat(task.timeSpent || task.hours || 0)
+                            taskTitle: task.taskTitle || 'No title',
+                            description: task.description || '',
+                            timeDisplay: task.timeSpent || formatTaskTime(task.hours, task.minutes)
                         }));
                     } else if (Array.isArray(timesheet.tasks)) {
                         parsedTasks = timesheet.tasks.map((task, index) => ({
                             id: task.id || index + 1,
-                            description: task.taskTitle || task.description || 'No description',
-                            hours: parseFloat(task.timeSpent || task.hours || 0)
+                            taskTitle: task.taskTitle || 'No title',
+                            description: task.description || '',
+                            timeDisplay: task.timeSpent || formatTaskTime(task.hours, task.minutes)
                         }));
                     }
                 } catch (error) {
@@ -104,7 +129,7 @@ const Timesheet = () => {
                         month: 'long',
                         day: 'numeric'
                     }),
-                    hours: `${timesheet.hours}h`,
+                    hours: formatTotalHours(timesheet.hours),
                     hoursWorked: timesheet.hours,
                     tasks: parsedTasks,
                     note: timesheet.note || 'No notes',
@@ -744,16 +769,43 @@ const Timesheet = () => {
                             <div className="entry_tasks " >
                                 <div className="tasks_header bodyRegularText4 ">Tasks:</div>
                                 <div className="task_bubbles">
-                                    {timesheet.tasks.map((task, index) => (
-                                        <div key={task.id || index} className="task_bubble ">
-                                            <span className="task_text bodyMediumText4">
-                                                {task.description || task.taskTitle || 'No description'}
-                                            </span>
-                                            <span className="task_duration bodyRegularText5">
-                                                {task.hours || task.timeSpent || 0}h
-                                            </span>
-                                        </div>
-                                    ))}
+                                    {timesheet.tasks.map((task, index) => {
+                                        const hasDescription = task.description && task.description.trim() !== '';
+                                        return (
+                                            <div key={task.id || index} className="task_bubble">
+                                                <span className="task_text bodyMediumText4">
+                                                    {task.taskTitle || 'No title'}
+                                                </span>
+                                                <span className="task_duration bodyRegularText5">
+                                                    {task.timeDisplay || task.timeSpent || '0min'}
+                                                </span>
+                                                {hasDescription && (
+                                                    <Tooltip 
+                                                        title={task.description}
+                                                        arrow
+                                                        placement="top"
+                                                        slotProps={{
+                                                            tooltip: {
+                                                                sx: {
+                                                                    bgcolor: '#1f2937',
+                                                                    fontSize: '12px',
+                                                                    maxWidth: '250px',
+                                                                    padding: '8px 12px',
+                                                                    '& .MuiTooltip-arrow': {
+                                                                        color: '#1f2937',
+                                                                    },
+                                                                },
+                                                            },
+                                                        }}
+                                                    >
+                                                        <div className="task-info-icon">
+                                                            <Info size={14} className="info-icon" />
+                                                        </div>
+                                                    </Tooltip>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

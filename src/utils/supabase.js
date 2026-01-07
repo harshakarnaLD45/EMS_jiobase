@@ -93,6 +93,94 @@ export const authApi = {
             isAdmin: true,
             loginType: 'admin'
         };
+    },
+
+    // Change password for employee
+    async changeEmployeePassword(employeeId, currentPassword, newPassword) {
+        if (!employeeId) {
+            throw new Error('Employee ID is required');
+        }
+        if (!currentPassword || !newPassword) {
+            throw new Error('Current and new password are required');
+        }
+        if (newPassword.length < 6) {
+            throw new Error('New password must be at least 6 characters');
+        }
+
+        // First verify current password
+        const { data: employee, error: fetchError } = await supabase
+            .from('employees')
+            .select('password_hash')
+            .eq('employee_id', employeeId)
+            .single();
+
+        if (fetchError || !employee) {
+            throw new Error('Employee not found');
+        }
+
+        if (employee.password_hash !== currentPassword) {
+            throw new Error('Current password is incorrect');
+        }
+
+        // Update to new password
+        const { error: updateError } = await supabase
+            .from('employees')
+            .update({ 
+                password_hash: newPassword,
+                updated_at: new Date().toISOString()
+            })
+            .eq('employee_id', employeeId);
+
+        if (updateError) {
+            console.error('❌ Error updating password:', updateError);
+            throw new Error('Failed to update password');
+        }
+
+        return { success: true, message: 'Password updated successfully' };
+    },
+
+    // Change password for admin
+    async changeAdminPassword(adminId, currentPassword, newPassword) {
+        if (!adminId) {
+            throw new Error('Admin ID is required');
+        }
+        if (!currentPassword || !newPassword) {
+            throw new Error('Current and new password are required');
+        }
+        if (newPassword.length < 6) {
+            throw new Error('New password must be at least 6 characters');
+        }
+
+        // First verify current password
+        const { data: admin, error: fetchError } = await supabase
+            .from('admins')
+            .select('password')
+            .eq('id', adminId)
+            .single();
+
+        if (fetchError || !admin) {
+            throw new Error('Admin not found');
+        }
+
+        if (admin.password !== currentPassword) {
+            throw new Error('Current password is incorrect');
+        }
+
+        // Update to new password
+        const { error: updateError } = await supabase
+            .from('admins')
+            .update({ 
+                password: newPassword,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', adminId);
+
+        if (updateError) {
+            console.error('❌ Error updating admin password:', updateError);
+            throw new Error('Failed to update password');
+        }
+
+        return { success: true, message: 'Password updated successfully' };
     }
 };
 
@@ -238,20 +326,65 @@ export const timesheetApi = {
 // Leave management related functions
 export const leaveApi = {
   async getLeaveBalance(employeeId) {
+    console.log('📊 getLeaveBalance called with employeeId:', employeeId);
+    
+    // STEP 1: Get current year
+    const currentYear = new Date().getFullYear();
+    console.log('📅 Current year:', currentYear);
+
+    // STEP 2: Query leave_balances with TWO filters
     const { data, error } = await supabase
       .from('leave_balances')
       .select('*')
       .eq('employee_id', employeeId)
-      .single();
+      .eq('year', currentYear)
+      .maybeSingle();
 
-    if (error) throw error;
+    console.log('🔍 Query result:', { data, error: error?.message });
 
-    // Map DB columns to UI-friendly fields
+    // STEP 3: If no data, return null
+    if (!data) {
+      console.log('⚠️ No leave balance found for employee', employeeId, 'year', currentYear);
+      return null;
+    }
+
+    // STEP 4: Extract actual database columns
+    const sick_leave_total = data.sick_leave ?? 0;
+    const casual_leave_total = data.casual_leave ?? 0;
+    const sick_used = data.sick_used ?? 0;
+    const casual_used = data.casual_used ?? 0;
+
+    // STEP 5: Calculate remaining values
+    const remaining_sick = Math.max(0, sick_leave_total - sick_used);
+    const remaining_casual = Math.max(0, casual_leave_total - casual_used);
+
+    console.log('✅ Calculated values:', {
+      sick_leave_total,
+      casual_leave_total,
+      sick_used,
+      casual_used,
+      remaining_sick,
+      remaining_casual
+    });
+
+    // STEP 6: Return object with correct fields
     return {
-      ...data,
-      casual_leave: data?.remaining_casual_leaves ?? 0,
-      sick_leave: data?.remaining_sick_leaves ?? 0,
+      remaining_sick,
+      remaining_casual,
+      sick_leave: remaining_sick, // Alias
+      casual_leave: remaining_casual, // Alias
+      total_sick: sick_leave_total,
+      total_casual: casual_leave_total,
+      used_sick: sick_used,
+      used_casual: casual_used,
+      year: data.year,
+      employee_id: data.employee_id
     };
+  },
+
+  // STEP 7: Add getLeaveBalanceByEmployeeId function (alias)
+  async getLeaveBalanceByEmployeeId(employeeId) {
+    return leaveApi.getLeaveBalance(employeeId);
   },
 
   async createLeaveRequest(leaveData) {
@@ -328,6 +461,34 @@ export const leaveApi = {
     return data;
   },
 
+  // Update leave request status (for admin approve/reject)
+  async updateLeaveStatus(leaveId, status, rejectionReason = null) {
+    console.log('📝 Updating leave status:', { leaveId, status, rejectionReason });
+    
+    const updateData = {
+      status: status,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Add rejection reason if provided
+    if (status === 'rejected' && rejectionReason) {
+      updateData.rejection_reason = rejectionReason;
+    }
+    
+    const { data, error } = await supabase
+      .from('leave_requests')
+      .update(updateData)
+      .eq('id', leaveId)
+      .select();
+    
+    if (error) {
+      console.error('❌ Error updating leave status:', error);
+      throw error;
+    }
+    
+    console.log('✅ Leave status updated:', data[0]);
+    return data[0];
+  },
 
 
     // Check if employee has any active approved leave requests for today's date
@@ -827,6 +988,516 @@ export const employeeApi = {
 
         if (error) throw error;
         return true;
+    },
+
+    // Update only allowed profile fields (user-editable fields)
+    async updateEmployeeProfile(employeeId, profileData) {
+        if (!employeeId) {
+            throw new Error('Employee ID is required for updating profile');
+        }
+
+        // Only allow these fields to be updated by the user
+        const allowedFields = ['first_name', 'last_name', 'name', 'phone', 'email'];
+        const sanitizedUpdates = {};
+        
+        for (const field of allowedFields) {
+            if (profileData[field] !== undefined) {
+                sanitizedUpdates[field] = profileData[field];
+            }
+        }
+
+        // Auto-generate name from first_name and last_name if provided
+        if (sanitizedUpdates.first_name || sanitizedUpdates.last_name) {
+            const firstName = sanitizedUpdates.first_name || profileData.first_name || '';
+            const lastName = sanitizedUpdates.last_name || profileData.last_name || '';
+            sanitizedUpdates.name = `${firstName} ${lastName}`.trim();
+        }
+
+        sanitizedUpdates.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from('employees')
+            .update(sanitizedUpdates)
+            .eq('employee_id', employeeId)
+            .select();
+
+        if (error) {
+            console.error('❌ Error updating employee profile:', error);
+            throw error;
+        }
+        
+        return data[0];
+    },
+
+    // Get full employee profile by employee_id
+    async getEmployeeProfile(employeeId) {
+        const { data, error } = await supabase
+            .from('employees')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .single();
+
+        if (error) {
+            console.error('❌ Error fetching employee profile:', error);
+            throw error;
+        }
+        
+        return data;
+    }
+};
+
+// Holidays API functions
+export const holidayApi = {
+    // Get all holidays (optionally filter by year)
+    async getHolidays(year = null) {
+        console.log('📅 Fetching holidays from database...', year ? `for year ${year}` : 'all');
+        
+        let query = supabase
+            .from('holidays')
+            .select('*')
+            .order('date', { ascending: true });
+        
+        if (year) {
+            // Filter by year - dates are stored as YYYY-MM-DD
+            query = query
+                .gte('date', `${year}-01-01`)
+                .lte('date', `${year}-12-31`);
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) {
+            console.error('❌ Error fetching holidays:', error);
+            throw error;
+        }
+        
+        console.log(`✅ Fetched ${data?.length || 0} holidays`);
+        return data || [];
+    },
+
+    // Upload holidays from Excel file data
+    async uploadHolidays(holidays) {
+        console.log('📤 Uploading holidays to database...', holidays.length, 'records');
+        
+        if (!holidays || holidays.length === 0) {
+            throw new Error('No holidays to upload');
+        }
+
+        // Group holidays by year
+        const holidaysByYear = {};
+        holidays.forEach(h => {
+            const year = h.date.split('-')[0];
+            if (!holidaysByYear[year]) {
+                holidaysByYear[year] = [];
+            }
+            holidaysByYear[year].push(h);
+        });
+
+        console.log('📊 Holidays grouped by year:', Object.keys(holidaysByYear));
+
+        // For each year, delete existing holidays first, then insert new ones
+        for (const year of Object.keys(holidaysByYear)) {
+            console.log(`🗑️ Deleting existing holidays for year ${year}...`);
+            
+            const { error: deleteError } = await supabase
+                .from('holidays')
+                .delete()
+                .gte('date', `${year}-01-01`)
+                .lte('date', `${year}-12-31`);
+
+            if (deleteError) {
+                console.error(`❌ Error deleting holidays for ${year}:`, deleteError);
+                throw deleteError;
+            }
+        }
+
+        // Prepare records for insertion
+        const records = holidays.map(h => ({
+            date: h.date,
+            name: h.name || 'Holiday',
+            created_at: new Date().toISOString()
+        }));
+
+        // Insert new holidays
+        const { data, error } = await supabase
+            .from('holidays')
+            .insert(records)
+            .select();
+
+        if (error) {
+            console.error('❌ Error inserting holidays:', error);
+            throw error;
+        }
+
+        console.log(`✅ Successfully uploaded ${data?.length || 0} holidays`);
+        return data;
+    },
+
+    // Add a single holiday
+    async addHoliday(date, name) {
+        console.log('➕ Adding holiday:', date, name);
+        
+        const { data, error } = await supabase
+            .from('holidays')
+            .insert({
+                date,
+                name: name || 'Holiday',
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error adding holiday:', error);
+            throw error;
+        }
+
+        return data;
+    },
+
+    // Delete a holiday by ID
+    async deleteHoliday(id) {
+        console.log('🗑️ Deleting holiday:', id);
+        
+        const { error } = await supabase
+            .from('holidays')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('❌ Error deleting holiday:', error);
+            throw error;
+        }
+
+        return { success: true };
+    },
+
+    // Delete all holidays for a specific year
+    async deleteHolidaysByYear(year) {
+        console.log('🗑️ Deleting all holidays for year:', year);
+        
+        const { error } = await supabase
+            .from('holidays')
+            .delete()
+            .gte('date', `${year}-01-01`)
+            .lte('date', `${year}-12-31`);
+
+        if (error) {
+            console.error('❌ Error deleting holidays:', error);
+            throw error;
+        }
+
+        return { success: true };
+    }
+};
+
+// Timesheet Compliance API - Warning & Auto Leave Deduction
+export const timesheetComplianceApi = {
+    
+     
+    formatDateLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    },
+
+    /**
+     * Check for missing timesheets and return warnings/auto-leave info
+     * Day+1 = Warning, Day+2 = Auto Leave Deduction
+     * Excludes weekends (Sundays) and holidays
+     * Only checks current year - fresh start each year
+     */
+    async checkMissingTimesheets(employeeId) {
+        console.log('🔍 Checking missing timesheets for employee:', employeeId);
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const currentYear = today.getFullYear();
+        const todayStr = this.formatDateLocal(today);
+        
+        console.log(`📅 Today is: ${todayStr} (year: ${currentYear})`);
+        
+        const result = {
+            warnings: [],        // Days that need warning (Day+1)
+            autoLeaveRequired: [], // Days that need auto-leave (Day+2)
+            processed: []        // Already processed auto-leaves
+        };
+        
+        try {
+            // Get holidays for the current year
+            const holidays = await holidayApi.getHolidays(currentYear);
+            const holidayDates = new Set(holidays.map(h => h.date));
+            
+            // FRESH START: Always start from January 1st of current year
+            // Never check previous year's timesheets
+            const janFirst = new Date(currentYear, 0, 1); // January 1st of current year
+            janFirst.setHours(0, 0, 0, 0);
+            
+            // Start date is ALWAYS Jan 1st of current year (fresh start)
+            const startDate = janFirst;
+            const startDateStr = `${currentYear}-01-01`;
+            
+            console.log(`📅 Checking timesheets from ${startDateStr} (current year: ${currentYear}, today: ${today.toISOString().split('T')[0]})`);
+            
+            const { data: timesheets, error: tsError } = await supabase
+                .from('timesheets')
+                .select('date')
+                .eq('employee_id', employeeId)
+                .gte('date', startDateStr);
+            
+            if (tsError) throw tsError;
+            
+            // Create set of dates with timesheets
+            const timesheetDates = new Set(
+                (timesheets || []).map(t => t.date?.split('T')[0])
+            );
+            
+            console.log('📋 Timesheets found for current year:', Array.from(timesheetDates));
+            
+            // Get existing auto-leave records to avoid duplicates
+            // Use broader check - any leave for a single day in this period
+            const { data: existingAutoLeaves, error: alError } = await supabase
+                .from('leave_requests')
+                .select('start_date, end_date, reason')
+                .eq('employee_id', employeeId)
+                .gte('start_date', startDateStr);
+            
+            if (alError) throw alError;
+            
+            // Create set of dates that already have auto-leaves (broader matching)
+            const autoLeaveDates = new Set();
+            (existingAutoLeaves || []).forEach(leave => {
+                const startDate = leave.start_date?.split('T')[0];
+                const endDate = leave.end_date?.split('T')[0];
+                const reason = (leave.reason || '').toLowerCase();
+                
+                // Only consider single-day leaves with timesheet-related reasons as auto-leaves
+                if (startDate === endDate && 
+                    (reason.includes('timesheet') || reason.includes('auto'))) {
+                    autoLeaveDates.add(startDate);
+                }
+            });
+            
+            console.log('📋 Existing auto-leave dates:', Array.from(autoLeaveDates));
+            
+            // Check each day from startDate until yesterday (only current year)
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = this.formatDateLocal(yesterday);
+            
+            console.log(`📆 Looping from ${startDateStr} to ${yesterdayStr}`);
+            
+            for (let d = new Date(startDate); d <= yesterday; d.setDate(d.getDate() + 1)) {
+                // Use local date format to avoid timezone issues
+                const dateStr = this.formatDateLocal(d);
+                const dateYear = d.getFullYear();
+                const dayOfWeek = d.getDay();
+                
+                // CRITICAL: Skip any date not in current year (extra safety check)
+                if (dateYear !== currentYear) {
+                    console.log(`⏭️ Skipping ${dateStr} - not in current year ${currentYear}`);
+                    continue;
+                }
+                
+                // Skip Sundays (0) and holidays
+                if (dayOfWeek === 0 || holidayDates.has(dateStr)) {
+                    continue;
+                }
+                
+                // Check if timesheet exists for this date
+                if (timesheetDates.has(dateStr)) {
+                    continue; // Timesheet submitted, all good
+                }
+                
+                // Calculate days since this missing date
+                const daysDiff = Math.floor((today - d) / (1000 * 60 * 60 * 24));
+                
+                console.log(`❓ Missing timesheet for ${dateStr}, daysDiff: ${daysDiff}`);
+                
+                if (autoLeaveDates.has(dateStr)) {
+                    // Already processed as auto-leave
+                    result.processed.push({
+                        date: dateStr,
+                        message: `Auto-leave already applied for ${dateStr}`
+                    });
+                } else if (daysDiff >= 2) {
+                    // Day+2 or more: Needs auto-leave deduction
+                    result.autoLeaveRequired.push({
+                        date: dateStr,
+                        daysDiff,
+                        message: `Timesheet for ${dateStr} was not submitted. Leave will be deducted.`
+                    });
+                } else if (daysDiff === 1) {
+                    // Day+1: Warning only
+                    result.warnings.push({
+                        date: dateStr,
+                        message: `Timesheet for ${dateStr} is not submitted. Please submit today to avoid leave deduction.`
+                    });
+                }
+            }
+            
+            console.log('📋 Missing timesheet check result:', result);
+            return result;
+            
+        } catch (error) {
+            console.error('❌ Error checking missing timesheets:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Create auto-leave record for missing timesheet
+     * Deducts from casual leave first, then sick leave
+     */
+    async createAutoLeaveForMissingTimesheet(employeeId, missingDate) {
+        console.log('⚠️ Creating auto-leave for missing timesheet:', employeeId, missingDate);
+        
+        // Generate a unique key for this operation to prevent race conditions
+        const operationKey = `auto-leave-${employeeId}-${missingDate}`;
+        
+        // Check if this operation is already in progress (race condition prevention)
+        if (this._processingLeaves && this._processingLeaves.has(operationKey)) {
+            console.log('⏭️ Auto-leave creation already in progress for:', operationKey);
+            return { skipped: true, reason: 'already_processing' };
+        }
+        
+        // Initialize processing set if not exists
+        if (!this._processingLeaves) {
+            this._processingLeaves = new Set();
+        }
+        this._processingLeaves.add(operationKey);
+        
+        try {
+            // CRITICAL: Check if ANY leave already exists for this date (broader check)
+            // This catches auto-leaves regardless of exact reason text
+            const { data: existingLeaves, error: checkError } = await supabase
+                .from('leave_requests')
+                .select('id, reason, status')
+                .eq('employee_id', employeeId)
+                .eq('start_date', missingDate)
+                .eq('end_date', missingDate);
+            
+            if (checkError) {
+                console.error('⚠️ Error checking existing auto-leave:', checkError);
+            }
+            
+            // Check if any auto-leave (with timesheet-related reason) exists
+            const autoLeaveExists = existingLeaves?.some(leave => 
+                leave.reason?.toLowerCase().includes('timesheet') ||
+                leave.reason?.toLowerCase().includes('auto')
+            );
+            
+            if (autoLeaveExists) {
+                console.log('⏭️ Auto-leave already exists for this date, skipping:', missingDate);
+                this._processingLeaves.delete(operationKey);
+                return existingLeaves[0]; // Return existing record instead of creating duplicate
+            }
+            
+            // Get current leave balance
+            const leaveBalance = await leaveApi.getLeaveBalance(employeeId);
+            
+            if (!leaveBalance) {
+                console.warn('⚠️ No leave balance found for employee:', employeeId);
+                // Still create the record but mark as unpaid/no balance
+            }
+            
+            // Determine which leave type to deduct (casual first, then sick)
+            let leaveType = 'casual';
+            if (leaveBalance && leaveBalance.remaining_casual <= 0) {
+                leaveType = 'sick';
+            }
+            
+            // Create auto-leave request
+            const leaveRecord = {
+                employee_id: employeeId,
+                leave_type: leaveType,
+                start_date: missingDate,
+                end_date: missingDate,
+                reason: 'Timesheet not submitted on this day',
+                subject: 'Auto Leave - Missing Timesheet',
+                status: 'approved', // Auto-approved since it's a system action
+                created_at: new Date().toISOString()
+            };
+            
+            const { data, error } = await supabase
+                .from('leave_requests')
+                .insert([leaveRecord])
+                .select();
+            
+            if (error) {
+                // Check if it's a duplicate key error (race condition at DB level)
+                if (error.code === '23505' || error.message?.includes('duplicate')) {
+                    console.log('⏭️ Duplicate detected at DB level, skipping:', missingDate);
+                    this._processingLeaves.delete(operationKey);
+                    return { skipped: true, reason: 'duplicate_at_db' };
+                }
+                throw error;
+            }
+            
+            // Update leave balance - increment used count
+            const usedColumn = leaveType === 'casual' ? 'casual_used' : 'sick_used';
+            const currentUsed = leaveType === 'casual' 
+                ? (leaveBalance?.used_casual || 0) 
+                : (leaveBalance?.used_sick || 0);
+            
+            const { error: updateError } = await supabase
+                .from('leave_balances')
+                .update({ 
+                    [usedColumn]: currentUsed + 1,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('employee_id', employeeId)
+                .eq('year', new Date().getFullYear());
+            
+            if (updateError) {
+                console.error('⚠️ Error updating leave balance:', updateError);
+                // Don't throw - the leave request was created successfully
+            }
+            
+            console.log('✅ Auto-leave created successfully:', data[0]);
+            this._processingLeaves.delete(operationKey);
+            return data[0];
+            
+        } catch (error) {
+            console.error('❌ Error creating auto-leave:', error);
+            this._processingLeaves.delete(operationKey);
+            throw error;
+        }
+    },
+
+    /**
+     * Process all pending auto-leaves for an employee
+     * Called when employee logs in or dashboard loads
+     */
+    async processAutoLeaves(employeeId) {
+        console.log('🔄 Processing auto-leaves for employee:', employeeId);
+        
+        const checkResult = await this.checkMissingTimesheets(employeeId);
+        const processedLeaves = [];
+        
+        for (const missing of checkResult.autoLeaveRequired) {
+            try {
+                const leave = await this.createAutoLeaveForMissingTimesheet(employeeId, missing.date);
+                processedLeaves.push({
+                    date: missing.date,
+                    success: true,
+                    leave
+                });
+            } catch (error) {
+                processedLeaves.push({
+                    date: missing.date,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+        
+        return {
+            warnings: checkResult.warnings,
+            autoLeaveRequired: checkResult.autoLeaveRequired,
+            processed: [...checkResult.processed, ...processedLeaves]
+        };
     }
 };
 
@@ -1186,6 +1857,45 @@ export const adminApi = {
             throw error;
         }
         
+        // Calculate the number of leave days
+        const startDate = new Date(leaveRequest.start_date);
+        const endDate = new Date(leaveRequest.end_date);
+        const leaveDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // Update leave_balances to reflect the approved leave
+        if (leaveRequest.employee_id && leaveRequest.leave_type) {
+            const leaveType = leaveRequest.leave_type.toLowerCase();
+            const usedColumn = leaveType === 'casual' ? 'casual_used' : 'sick_used';
+            const currentYear = new Date().getFullYear();
+            
+            // Get current balance
+            const { data: balanceData } = await supabase
+                .from('leave_balances')
+                .select('*')
+                .eq('employee_id', leaveRequest.employee_id)
+                .eq('year', currentYear)
+                .maybeSingle();
+            
+            if (balanceData) {
+                const currentUsed = balanceData[usedColumn] || 0;
+                
+                const { error: updateError } = await supabase
+                    .from('leave_balances')
+                    .update({ 
+                        [usedColumn]: currentUsed + leaveDays,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('employee_id', leaveRequest.employee_id)
+                    .eq('year', currentYear);
+                
+                if (updateError) {
+                    console.error('⚠️ Error updating leave balance:', updateError);
+                } else {
+                    console.log(`✅ Leave balance updated: ${usedColumn} increased by ${leaveDays}`);
+                }
+            }
+        }
+        
         // Update employee status to "Leave"
         if (leaveRequest.employee_id) {
             const employeeIdToUpdate = leaveRequest.employee_id;
@@ -1346,3 +2056,131 @@ function calculateLeaveDays(startDate, endDate) {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Include both start and end days
     return diffDays;
 }
+
+// Account Details API functions
+export const accountDetailsApi = {
+    // Get account details for an employee
+    async getAccountDetails(employeeId) {
+        console.log('📋 Getting account details for employee:', employeeId);
+        
+        const { data, error } = await supabase
+            .from('account_details')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .maybeSingle();
+        
+        if (error) {
+            console.error('❌ Error fetching account details:', error);
+            throw error;
+        }
+        
+        return data;
+    },
+
+    // Save (insert or update) account details
+    async saveAccountDetails(employeeId, details) {
+        console.log('💾 Saving account details for employee:', employeeId);
+        
+        // Check if record exists
+        const existing = await this.getAccountDetails(employeeId);
+        
+        const accountData = {
+            employee_id: employeeId,
+            bank_name: details.bank_name || null,
+            bank_account_number: details.bank_account_number || null,
+            ifsc_code: details.ifsc_code || null,
+            aadhaar_number: details.aadhaar_number || null,
+            aadhaar_address: details.aadhaar_address || null,
+            pan_number: details.pan_number || null,
+            updated_at: new Date().toISOString()
+        };
+        
+        let result;
+        
+        if (existing) {
+            // Update existing record
+            const { data, error } = await supabase
+                .from('account_details')
+                .update(accountData)
+                .eq('employee_id', employeeId)
+                .select();
+            
+            if (error) throw error;
+            result = data[0];
+        } else {
+            // Insert new record
+            accountData.created_at = new Date().toISOString();
+            
+            const { data, error } = await supabase
+                .from('account_details')
+                .insert([accountData])
+                .select();
+            
+            if (error) throw error;
+            result = data[0];
+        }
+        
+        console.log('✅ Account details saved successfully');
+        return result;
+    },
+
+    // Get all account details (for admin)
+    async getAllAccountDetails() {
+        console.log('📋 Getting all account details (admin)');
+        
+        const { data, error } = await supabase
+            .from('account_details')
+            .select(`
+                *,
+                employees (
+                    name,
+                    email,
+                    phone,
+                    employee_id,
+                    department,
+                    position
+                )
+            `)
+            .order('updated_at', { ascending: false });
+        
+        if (error) {
+            console.error('❌ Error fetching all account details:', error);
+            throw error;
+        }
+        
+        return data || [];
+    },
+
+    // Get account details by employee ID (for admin modal)
+    async getAccountDetailsByEmployeeId(employeeId) {
+        console.log('📋 Getting account details for employee (admin view):', employeeId);
+        
+        // Get account details
+        const { data: accountData, error: accError } = await supabase
+            .from('account_details')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .maybeSingle();
+        
+        if (accError) {
+            console.error('❌ Error fetching account details:', accError);
+        }
+        
+        // Get employee info
+        const { data: employeeData, error: empError } = await supabase
+            .from('employees')
+            .select('name, email, phone, employee_id, department, position')
+            .eq('employee_id', employeeId)
+            .maybeSingle();
+        
+        if (empError) {
+            console.error('❌ Error fetching employee info:', empError);
+        }
+        
+        return {
+            account: accountData || {},
+            employee: employeeData || {}
+        };
+    }
+};
+

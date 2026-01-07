@@ -165,7 +165,7 @@ BEGIN
     IF NOT FOUND THEN
         RETURN QUERY
         INSERT INTO public.leave_balances (employee_id, year, sick_leave, casual_leave, sick_used, casual_used)
-        VALUES (emp_id, target_year, 5, 12, 0, 0)
+        VALUES (emp_id, target_year, 4, 10, 0, 0)
         RETURNING *;
     END IF;
 END;
@@ -192,52 +192,46 @@ EXECUTE FUNCTION public.create_initial_leave_balance();
 -- ==========================================
 -- ROW LEVEL SECURITY
 -- ==========================================
+-- For custom authentication (not using Supabase Auth), we allow public read access
+-- This enables login queries to work. Consider additional security measures in production.
+
 ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.timesheets ENABLE ROW LEVEL SECURITY;
 
--- Admins can do everything
-CREATE POLICY "Admins can do everything" ON public.admins
+-- Admins table: Allow SELECT for login, full access for management
+CREATE POLICY "Allow admin login" ON public.admins
+FOR SELECT USING (true);
+
+CREATE POLICY "Allow admin operations" ON public.admins
 FOR ALL USING (true);
 
--- Employees: Allow authenticated users
-CREATE POLICY "Authenticated users can view employees" ON public.employees
-FOR SELECT USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Authenticated users can update own profile" ON public.employees
-FOR UPDATE USING (auth.role() = 'authenticated');
-
--- Leave balances
-CREATE POLICY "Users can view own leave balance" ON public.leave_balances
+-- Employees table: Allow public read for authentication
+CREATE POLICY "Allow employee login" ON public.employees
 FOR SELECT USING (true);
 
-CREATE POLICY "System can insert leave balance" ON public.leave_balances
+CREATE POLICY "Allow employee insert" ON public.employees
 FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "System can update leave balance" ON public.leave_balances
+CREATE POLICY "Allow employee update" ON public.employees
 FOR UPDATE USING (true);
 
--- Leave requests
-CREATE POLICY "Users can view leave requests" ON public.leave_requests
-FOR SELECT USING (true);
+CREATE POLICY "Allow employee delete" ON public.employees
+FOR DELETE USING (true);
 
-CREATE POLICY "Users can create leave requests" ON public.leave_requests
-FOR INSERT WITH CHECK (true);
+-- Leave balances: Allow full access
+CREATE POLICY "Allow leave balance operations" ON public.leave_balances
+FOR ALL USING (true);
 
-CREATE POLICY "Users can update leave requests" ON public.leave_requests
-FOR UPDATE USING (true);
+-- Leave requests: Allow full access
+CREATE POLICY "Allow leave request operations" ON public.leave_requests
+FOR ALL USING (true);
 
--- Timesheets
-CREATE POLICY "Users can view timesheets" ON public.timesheets
-FOR SELECT USING (true);
-
-CREATE POLICY "Users can create timesheets" ON public.timesheets
-FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Users can update timesheets" ON public.timesheets
-FOR UPDATE USING (true);
+-- Timesheets: Allow full access
+CREATE POLICY "Allow timesheet operations" ON public.timesheets
+FOR ALL USING (true);
 
 -- ==========================================
 -- SAMPLE DATA
@@ -252,3 +246,180 @@ VALUES
 ('Jane Smith', 'jane.smith@company.com', '+1234567891', 'Marketing', 'Marketing Manager', 'Jane', 'Smith', 'password123'),
 ('Bob Johnson', 'bob.johnson@company.com', '+1234567892', 'Sales', 'Sales Representative', 'Bob', 'Johnson', 'password123')
 ON CONFLICT (email) DO NOTHING;
+
+-- ========================================== 
+-- EMS v2 - 2026 
+--Leave Balances Initialization 
+-- ========================================== 
+INSERT INTO public.leave_balances (
+    employee_id,
+    year,
+    sick_leave,
+    casual_leave,
+    sick_used,
+    casual_used
+)
+SELECT
+    e.employee_id,
+    2026,
+    4,
+    10,
+    0,
+    0
+FROM public.employees e
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.leave_balances lb
+    WHERE lb.employee_id = e.employee_id
+      AND lb.year = 2026
+);
+
+-- ==========================================
+-- Account Details Table
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.account_details (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+
+    -- Must match employees.employee_id type
+    employee_id UUID NOT NULL UNIQUE,
+
+    -- Bank Details
+    bank_name VARCHAR(100),
+    bank_account_number VARCHAR(50),
+    ifsc_code VARCHAR(20),
+
+    -- Identity Details
+    aadhaar_number VARCHAR(12),
+    aadhaar_address TEXT,
+    pan_number VARCHAR(10),
+
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    -- Foreign key constraint
+    CONSTRAINT fk_employee
+        FOREIGN KEY (employee_id)
+        REFERENCES public.employees(employee_id)
+        ON DELETE CASCADE
+);
+
+-- Index for performance
+CREATE INDEX IF NOT EXISTS idx_account_details_employee_id
+ON public.account_details(employee_id);
+
+-- Enable RLS
+ALTER TABLE public.account_details ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Employees can view own account details"
+    ON public.account_details
+    FOR SELECT USING (true);
+
+CREATE POLICY "Employees can insert own account details"
+    ON public.account_details
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Employees can update own account details"
+    ON public.account_details
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Admins can manage all account details"
+    ON public.account_details
+    FOR ALL USING (true);
+
+COMMENT ON TABLE public.account_details
+IS 'Stores employee bank and identity details for payroll and verification';
+
+-- ============================================
+-- HOLIDAYS TABLE CREATION SCRIPT FOR SUPABASE
+-- ============================================
+-- Run this script in your Supabase SQL Editor
+
+-- Create the holidays table
+CREATE TABLE IF NOT EXISTS holidays (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    date DATE NOT NULL,
+    name VARCHAR(255) NOT NULL DEFAULT 'Holiday',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create an index on the date column for faster queries
+CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date);
+
+-- Create a unique constraint to prevent duplicate dates
+-- (one holiday per date)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_holidays_unique_date ON holidays(date);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow read access to all users" ON holidays
+    FOR SELECT
+    USING (true);
+
+CREATE POLICY "Allow insert for authenticated users" ON holidays
+    FOR INSERT
+    WITH CHECK (true);
+
+CREATE POLICY "Allow update for authenticated users" ON holidays
+    FOR UPDATE
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "Allow delete for authenticated users" ON holidays
+    FOR DELETE
+    USING (true);
+
+-- Create a function to update the updated_at timestamp
+CREATE OR REPLACE FUNCTION update_holidays_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create a trigger to automatically update updated_at
+CREATE TRIGGER trigger_holidays_updated_at
+    BEFORE UPDATE ON holidays
+    FOR EACH ROW
+    EXECUTE FUNCTION update_holidays_updated_at();
+
+-- ============================================
+-- SAMPLE DATA (Optional - Remove if not needed)
+-- ============================================
+-- Uncomment the lines below to insert sample holidays for 2026
+
+-- INSERT INTO holidays (date, name) VALUES
+--     ('2026-01-01', 'New Year''s Day'),
+--     ('2026-01-26', 'Republic Day'),
+--     ('2026-03-10', 'Holi'),
+--     ('2026-04-02', 'Good Friday'),
+--     ('2026-04-14', 'Ambedkar Jayanti'),
+--     ('2026-05-01', 'May Day'),
+--     ('2026-08-15', 'Independence Day'),
+--     ('2026-10-02', 'Gandhi Jayanti'),
+--     ('2026-10-20', 'Dussehra'),
+--     ('2026-11-10', 'Diwali'),
+--     ('2026-12-25', 'Christmas')
+-- ON CONFLICT (date) DO UPDATE SET name = EXCLUDED.name;
+
+-- ============================================
+-- VERIFICATION QUERIES
+-- ============================================
+-- After running the script, use these queries to verify:
+
+-- Check if table exists
+-- SELECT * FROM holidays LIMIT 10;
+
+-- Check table structure
+-- \d holidays
+
+-- Count holidays by year
+-- SELECT EXTRACT(YEAR FROM date) as year, COUNT(*) as count 
+-- FROM holidays 
+-- GROUP BY EXTRACT(YEAR FROM date) 
+-- ORDER BY year;
+

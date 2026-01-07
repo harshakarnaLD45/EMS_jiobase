@@ -212,7 +212,7 @@ const styles = {
 
 const LeaveRequestForm = ({ onClose }) => {
   const { user } = useAuth();
-  const { leaveBalance, loading, error, requestLeave } = useLeave();
+  const { leaveSummary, loading, error, requestLeave } = useLeave();
 
   const [formData, setFormData] = useState({
     leaveType: '',
@@ -237,22 +237,21 @@ const LeaveRequestForm = ({ onClose }) => {
     checked: false
   });
 
-  // Get leave types from leaveBalance with correct property names
-  const leaveTypes = leaveBalance ? [
-    { 
-      type: 'sick', 
-      label: 'Sick Leave', 
-      remaining: leaveBalance.remaining_sick_leaves || 0 
-    },
-    { 
-      type: 'casual', 
-      label: 'Casual Leave', 
-      remaining: leaveBalance.remaining_casual_leaves || 0 
-    }
-  ] : [
-    { type: 'sick', label: 'Sick Leave', remaining: 0 },
-    { type: 'casual', label: 'Casual Leave', remaining: 0 }
-  ];
+  // Get leave types from leaveSummary with pre-computed remaining values
+const leaveTypes = [
+  {
+    type: 'sick',
+    label: 'Sick Leave',
+    remaining: leaveSummary?.remaining_sick ?? 0
+  },
+  {
+    type: 'casual',
+    label: 'Casual Leave',
+    remaining: leaveSummary?.remaining_casual ?? 0
+  },
+];
+
+
 
   // Check for active leave requests
   useEffect(() => {
@@ -344,6 +343,13 @@ const LeaveRequestForm = ({ onClose }) => {
 
     setDocumentFile(file);
   };
+ const formatLocalDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 
   const calculateLeaveDays = () => {
     if (!formData.startDate || !formData.endDate) return 0;
@@ -394,7 +400,7 @@ const LeaveRequestForm = ({ onClose }) => {
       // Prepare leave request
       const leaveRequest = {
         user_id: user?.id,
-        employee_id: user?.employee_id || leaveBalance?.employee_id,
+        employee_id: user?.employee_id || user?.id,
         leave_type: formData.leaveType,
         start_date: formData.startDate,
         end_date: formData.endDate,
@@ -533,25 +539,34 @@ const LeaveRequestForm = ({ onClose }) => {
                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
                 padding: '0.5rem'
               }}>
-                <CustomCalendar
+             <CustomCalendar
                   onDateRangeSelect={(range) => {
-                    if (range.from && range.to) {
-                      const startDate = range.from.toISOString().split('T')[0];
-                      const endDate = range.to.toISOString().split('T')[0];
-                      
-                      setFormData({
-                        ...formData,
-                        startDate: startDate,
-                        endDate: endDate,
-                        selectedDate: `${startDate} to ${endDate}`
-                      });
-                      
-                      setCalendarVisible(false);
-                    }
-                  }}
-                  singleDateMode={false}
-                  minDate={new Date()}
-                />
+                  if (range.from && range.to) {
+                  const startDate = formatLocalDate(range.from);
+                  const endDate = formatLocalDate(range.to);
+                   setFormData({
+                    ...formData,
+                    startDate,
+                    endDate,
+                    selectedDate: `${startDate} to ${endDate}`
+                });
+          setCalendarVisible(false);
+         }
+       }}
+  singleDateMode={false}
+  minDate={(() => {
+    // Casual Leave: Must be applied at least 1 week (7 days) in advance
+    // Sick Leave: No restrictions - can apply for today, tomorrow, etc.
+    if (formData.leaveType === 'casual') {
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() + 7);
+      return minDate;
+    }
+    // For sick leave, allow applying from today onwards (no advance notice required)
+    return new Date();
+  })()}
+/>
+
               </div>
             )}
           </div>

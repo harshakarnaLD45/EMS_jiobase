@@ -7,21 +7,78 @@ const LeaveContext = createContext();
 export function LeaveProvider({ children }) {
     const [leaveRequests, setLeaveRequests] = useState([]);
     const [leaveSetting, setLeaveSetting] = useState(null);
+    const [leaveSummary, setLeaveSummary] = useState({
+        used_casual: 0,
+        used_sick: 0,
+        remaining_casual: 0,
+        remaining_sick: 0
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { user } = useAuth();
 
+    // Reactive leave summary calculation - uses database values directly
     useEffect(() => {
-        if (user) loadLeaveData();
-        else {
+        console.log('Calculating leave summary...', { leaveSetting });
+
+        // Handle empty state
+        if (!leaveSetting) {
+            console.log('⚠️ No leave setting available');
+            setLeaveSummary({
+                used_casual: 0,
+                used_sick: 0,
+                total_casual: 0,
+                total_sick: 0,
+                remaining_casual: 0,
+                remaining_sick: 0,
+                isAvailable: false
+            });
+            return;
+        }
+
+        // STEP 1: Get values from leaveSetting (which came from database)
+        const total_casual = leaveSetting.total_casual_leaves ?? 0;
+        const total_sick = leaveSetting.total_sick_leaves ?? 0;
+        const used_casual = leaveSetting.casual_used ?? 0;
+        const used_sick = leaveSetting.sick_used ?? 0;
+
+        // STEP 2: Calculate remaining
+        const remaining_casual = Math.max(0, total_casual - used_casual);
+        const remaining_sick = Math.max(0, total_sick - used_sick);
+
+        // STEP 3: Create summary object with isAvailable flag
+        const summary = {
+            used_casual,
+            used_sick,
+            total_casual,
+            total_sick,
+            remaining_casual,
+            remaining_sick,
+            isAvailable: true
+        };
+
+        console.log('New leaveSummary:', summary);
+        
+        // STEP 4: Set summary
+        setLeaveSummary(summary);
+    }, [leaveSetting]); // STEP 5: Only recalculate when leaveSetting changes
+
+    // Load data when user changes
+    useEffect(() => {
+        if (user) {
+            console.log('User logged in, loading leave data...', user);
+            loadLeaveData();
+        } else {
             setLeaveRequests([]);
             setLeaveSetting(null);
+            setLeaveSummary({ used_casual: 0, used_sick: 0, remaining_casual: 0, remaining_sick: 0 });
             setLoading(false);
         }
     }, [user]);
 
+    // FIXED loadLeaveData with proper fallback
     const loadLeaveData = async () => {
-        if (!user) return setLoading(false);
+        if (!user) return;
 
         try {
             setLoading(true);
@@ -29,69 +86,99 @@ export function LeaveProvider({ children }) {
 
             const { supabase } = await import('../utils/supabase');
 
-            // 1️⃣ Get employee info
-            const { data: employeeData, error: empError } = await supabase
-                .from('employees')
-                .select('id, employee_id, role')
-                .eq('employee_id', user.employee_id || user.id)
-                .maybeSingle();
+            console.log('Trying to find employee for user:', { employee_id: user.employee_id, auth_id: user.id });
 
-            if (empError || !employeeData) throw new Error('Employee not found');
+            let employeeData = null;
 
-            // 2️⃣ Get leave settings for employee type
-            const { data: settingData, error: settingError } = await supabase
-                .from('leave_settings')
+            // PART A - First employee query (using user.employee_id):
+            // Try user.employee_id first
+            if (user.employee_id) {
+                const { data, error } = await supabase
+                    .from('employees')
+                    .select('id, employee_id, name, email, department, position, status')
+                    .eq('employee_id', user.employee_id)
+                    .maybeSingle();
+
+                console.log('Query with employee_id result:', { data, error: error?.message });
+                employeeData = data;
+            }
+
+            // PART B - Fallback employee query (using user.id):
+            // Fallback to auth user.id
+            if (!employeeData && user.id) {
+                const { data, error } = await supabase
+                    .from('employees')
+                    .select('id, employee_id, name, email, department, position, status')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                console.log('Fallback query with user.id result:', { data, error: error?.message });
+                employeeData = data;
+            }
+
+            if (!employeeData) {
+                throw new Error('Employee record not found. Check if employee row exists with employee_id matching either your custom employee_id or auth UUID.');
+            }
+
+            console.log('Employee found:', employeeData);
+
+            // STEP 1: Get current year
+            const currentYear = new Date().getFullYear();
+            console.log('📅 Loading leave balance for year:', currentYear);
+
+            // STEP 2: Query leave_balances with correct filters
+            const { data: balanceData, error: balanceError } = await supabase
+                .from('leave_balances')
                 .select('*')
-                .eq('type', employeeData.role || 'Intern') // fallback to 'Intern'
+                .eq('employee_id', employeeData.employee_id)
+                .eq('year', currentYear)
                 .maybeSingle();
 
-            if (settingError || !settingData) throw new Error('Leave settings not found');
+            console.log('Leave balance query result:', { balanceData, error: balanceError?.message });
 
+            // STEP 3 & 4: Handle if no balance data exists, or map it
+            let settingData = null;
+            
+            if (!balanceData) {
+                console.log('⚠️ No leave balance found for employee', employeeData.employee_id, 'year', currentYear);
+                settingData = null;
+            } else {
+                settingData = {
+                    total_sick_leaves: balanceData.sick_leave ?? 0,
+                    total_casual_leaves: balanceData.casual_leave ?? 0,
+                    sick_used: balanceData.sick_used ?? 0,
+                    casual_used: balanceData.casual_used ?? 0,
+                    year: balanceData.year,
+                    employee_id: balanceData.employee_id
+                };
+                console.log('Leave balance loaded:', settingData);
+            }
+
+            // STEP 5: Set the setting
             setLeaveSetting(settingData);
 
-            // 3️⃣ Get leave requests for this employee
+            // Load leave requests
             const { data: requests = [] } = await supabase
                 .from('leave_requests')
                 .select('*')
                 .eq('employee_id', employeeData.employee_id);
 
+            console.log('Leave requests loaded:', requests.length, requests);
             setLeaveRequests(requests);
 
         } catch (err) {
-            console.error('❌ Error loading leave data:', err);
+            console.error('Failed to load leave data:', err);
             setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    // Calculate used & remaining leaves
-    const getLeaveSummary = () => {
-        if (!leaveSetting) return { used_casual: 0, used_sick: 0, remaining_casual: 0, remaining_sick: 0 };
-
-        const currentYear = new Date().getFullYear();
-
-        const used_casual = leaveRequests
-            .filter(r => r.leave_type === 'casual' && r.status === 'approved' && new Date(r.start_date).getFullYear() === currentYear)
-            .reduce((sum, r) => sum + ((new Date(r.end_date) - new Date(r.start_date)) / (1000 * 60 * 60 * 24) + 1), 0);
-
-        const used_sick = leaveRequests
-            .filter(r => r.leave_type === 'sick' && r.status === 'approved' && new Date(r.start_date).getFullYear() === currentYear)
-            .reduce((sum, r) => sum + ((new Date(r.end_date) - new Date(r.start_date)) / (1000 * 60 * 60 * 24) + 1), 0);
-
-        return {
-            used_casual,
-            used_sick,
-            remaining_casual: Math.max(0, leaveSetting.total_casual_leaves - used_casual),
-            remaining_sick: Math.max(0, leaveSetting.total_sick_leaves - used_sick)
-        };
-    };
-
     const requestLeave = async (leaveData) => {
         try {
             setError(null);
             const result = await leaveApi.createLeaveRequest(leaveData);
-            await loadLeaveData(); // refresh data
+            await loadLeaveData();
             return result;
         } catch (err) {
             setError(err.message);
@@ -103,11 +190,12 @@ export function LeaveProvider({ children }) {
         <LeaveContext.Provider value={{
             leaveRequests,
             leaveSetting,
-            leaveSummary: getLeaveSummary(),
+            leaveSummary,
             loading,
             error,
             requestLeave,
-            refreshLeaveData: loadLeaveData
+            refreshLeaveData: loadLeaveData,
+            refreshBalance: loadLeaveData  // ← Removes the warning
         }}>
             {children}
         </LeaveContext.Provider>
@@ -116,6 +204,8 @@ export function LeaveProvider({ children }) {
 
 export function useLeave() {
     const context = useContext(LeaveContext);
-    if (!context) throw new Error('useLeave must be used within a LeaveProvider');
+    if (!context) {
+        throw new Error('useLeave must be used within a LeaveProvider');
+    }
     return context;
 }

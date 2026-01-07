@@ -146,10 +146,27 @@ const Sidebar = ({ open, onClose }) => {
 
       {/* Profile & Sign Out */}
       <div style={{ padding: '24px', borderTop: '1px solid #e5e7eb' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+        <div 
+          onClick={() => {
+            navigate('/profile');
+            onClose();
+          }}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            // marginBottom: '6px',
+            padding: '8px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
           <div style={{ 
-            width: '40px', 
-            height: '40px', 
+            width: '35px', 
+            height: '35px', 
             borderRadius: '50%', 
             backgroundColor: '#dbeafe', 
             display: 'flex', 

@@ -7,14 +7,13 @@ import EmployeeManagement from './pages/employeeManagement/EmployeeManagement.js
 import Timesheet from './pages/timesheet/timesheet.js';
 import Leave from './pages/leave/leave.js';
 import Login from './pages/login/Login.jsx';
+import ProfilePage from './components/profile-page/page.jsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LeaveProvider } from './contexts/LeaveContext';
 import { EmployeeProvider } from './contexts/EmployeeContext';
 import Attendance from './pages/attendencepage/attendencepage.js';
+// import AccountDetails from './pages/Accdetails/accountdetails.js';
 
-// ===============================
-// Default Redirect Component
-// ===============================
 const DefaultRedirect = () => {
   const { isAdmin, isEmployee } = useAuth();
 
@@ -23,19 +22,15 @@ const DefaultRedirect = () => {
   return <Navigate to="/dashboard" replace />;
 };
 
-// ===============================
-// App Component
-// ===============================
 function App() {
   return (
     <div className="App">
-      {/* ✅ Only one BrowserRouter (Router) here */}
       <Router>
         <AuthProvider>
           <EmployeeProvider>
             <LeaveProvider>
               <Routes>
-                {/* ---------- Public Route ---------- */}
+                
                 <Route path="/login" element={<Login />} />
 
                 {/* ---------- Protected Routes ---------- */}
@@ -57,6 +52,8 @@ function App() {
                   <Route path="timesheet" element={<Timesheet />} />
                   <Route path="leave" element={<Leave />} />
                   <Route path="attendance" element={<Attendance />} />
+                  <Route path="profile" element={<ProfilePage />} />
+                  {/* <Route path="account-details" element={<AccountDetails />} /> */}
 
                   {/* Admin-only Routes */}
                   <Route

@@ -181,7 +181,7 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
     workDate: new Date().toISOString().split('T')[0],
     hoursWorked: '0',
 
-    tasks: [{ taskTitle: '', timeSpent: '0' }]
+    tasks: [{ taskTitle: '', hours: 0, minutes: 0 }]
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState('');
@@ -190,15 +190,22 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Clear previous validation errors
     setValidationError('');
 
-    // Validate that all tasks have timeSpent values
-    const hasEmptyTimeSpent = formData.tasks.some(task => 
-      !task.timeSpent || parseFloat(task.timeSpent) <= 0
+    // Restrict submitting timesheet FOR Sunday (work date cannot be Sunday)
+    const workDate = new Date(formData.workDate);
+    if (workDate.getDay() === 0) { 
+      setValidationError('Timesheets cannot be submitted for Sundays. Please select a weekday (Monday-Saturday).');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate that all tasks have time values
+    const hasEmptyTime = formData.tasks.some(task => 
+      (task.hours || 0) === 0 && (task.minutes || 0) === 0
     );
 
-    if (hasEmptyTimeSpent) {
+    if (hasEmptyTime) {
       setValidationError('Please enter time spent for all tasks. Each task must have a duration greater than 0.');
       setIsSubmitting(false);
       return;
@@ -212,13 +219,34 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
     }
 
     try {
+      // Format tasks with readable time display (e.g., "2h 30min" or "45min")
+      const formattedTasks = formData.tasks.map(task => {
+        const h = task.hours || 0;
+        const m = task.minutes || 0;
+        let timeDisplay = '';
+        if (h > 0 && m > 0) {
+          timeDisplay = `${h}h ${m}min`;
+        } else if (h > 0) {
+          timeDisplay = `${h}h`;
+        } else {
+          timeDisplay = `${m}min`;
+        }
+        return {
+          taskTitle: task.taskTitle,
+          description: task.description || '',
+          hours: h,
+          minutes: m,
+          timeSpent: timeDisplay
+        };
+      });
+
       // Create timesheet data for Supabase (matching updated schema)
       const timesheetData = {
         userId: user?.id,
         employee_id: user?.employee_id || user?.id, // Use employee_id if available, fallback to user.id
         workDate: formData.workDate,
         hoursWorked: parseFloat(formData.hoursWorked),
-        tasks: formData.tasks,
+        tasks: formattedTasks,
         note: '', // Add note field as per schema
         status: 'pending',
         user: user // Pass user data for employee lookup
@@ -255,49 +283,35 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
     }
   };
   
-  // Converts decimal hours (e.g., 8.5) → "8 hr : 30 min"
-    const handleTaskChange = (index, field, value) => {
-  setFormData(prev => {
-    const newTasks = [...prev.tasks];
-    const task = { ...newTasks[index] };
+  // Handle task field changes - store hours and minutes directly
+  const handleTaskChange = (index, field, value) => {
+    setFormData(prev => {
+      const newTasks = [...prev.tasks];
+      const task = { ...newTasks[index] };
 
-    if (field === 'hours' || field === 'minutes') {
-      // Convert the existing timeSpent (decimal) to h/m
-      const [h, m] = formatHoursToHHMM(task.timeSpent).split(':').map(Number);
-      const newHours = field === 'hours' ? parseInt(value) || 0 : h;
-      const newMinutes = field === 'minutes' ? parseInt(value) || 0 : m;
+      if (field === 'hours') {
+        task.hours = parseInt(value) || 0;
+      } else if (field === 'minutes') {
+        task.minutes = parseInt(value) || 0;
+      } else {
+        task[field] = value;
+      }
 
-      // Convert back to decimal hours
-      task.timeSpent = (newHours + newMinutes / 60).toFixed(2);
-    } else {
-      task[field] = value;
-    }
+      newTasks[index] = task;
 
-    newTasks[index] = task;
+      // Recalculate total hours from all tasks
+      const totalMinutes = newTasks.reduce((sum, t) => {
+        return sum + ((t.hours || 0) * 60) + (t.minutes || 0);
+      }, 0);
+      const totalHours = totalMinutes / 60;
 
-    // Recalculate total hours
-    const totalHours = newTasks.reduce((sum, t) => sum + (parseFloat(t.timeSpent) || 0), 0);
-
-    return {
-      ...prev,
-      tasks: newTasks,
-      hoursWorked: totalHours.toFixed(2),
-    };
-  });
-};
-
-
-const formatHoursToHHMM = (hours) => {
-  if (isNaN(hours) || hours === null || hours === undefined) return '00:00';
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-};
-const formatTotalHours = (decimalHours) => {
-  const hours = Math.floor(decimalHours);
-  const minutes = Math.round((decimalHours - hours) * 60);
-  return `${hours} hrs ${minutes} min`;
-};
+      return {
+        ...prev,
+        tasks: newTasks,
+        hoursWorked: totalHours.toString(),
+      };
+    });
+  };
 
  
 
@@ -314,7 +328,7 @@ const formatTotalHours = (decimalHours) => {
   const addTask = () => {
     setFormData(prev => ({
       ...prev,
-      tasks: [...prev.tasks, { taskTitle: '', timeSpent: '0' }]
+      tasks: [...prev.tasks, { taskTitle: '', hours: 0, minutes: 0 }]
     }));
   };
 
@@ -323,9 +337,10 @@ const formatTotalHours = (decimalHours) => {
       const newTasks = prev.tasks.filter((_, i) => i !== index);
       
       // Recalculate total hours after removing task
-      const totalHours = newTasks.reduce((sum, task) => {
-        return sum + (parseFloat(task.timeSpent) || 0);
+      const totalMinutes = newTasks.reduce((sum, task) => {
+        return sum + ((task.hours || 0) * 60) + (task.minutes || 0);
       }, 0);
+      const totalHours = totalMinutes / 60;
 
       return {
         ...prev,
@@ -432,7 +447,7 @@ const formatTotalHours = (decimalHours) => {
       type="number"
       className="bodyMediumText4"
       name="hours"
-      value={formatHoursToHHMM(task.timeSpent).split(':')[0]}
+      value={task.hours || 0}
       onChange={(e) => handleTaskChange(index, 'hours', e.target.value)}
       min="0"
       max="23"
@@ -452,7 +467,7 @@ const formatTotalHours = (decimalHours) => {
       type="number"
       className="bodyMediumText4"
       name="minutes"
-      value={formatHoursToHHMM(task.timeSpent).split(':')[1]}
+      value={task.minutes || 0}
       onChange={(e) => handleTaskChange(index, 'minutes', e.target.value)}
       min="0"
       max="59"
@@ -512,13 +527,12 @@ const formatTotalHours = (decimalHours) => {
     >
   <span className="bodyMediumText4" style={{ color: '#374151' }}>
   {(() => {
-    const total = formData.tasks.reduce((sum, task) => {
-      const time = parseFloat(task.timeSpent);
-      return sum + (isNaN(time) ? 0 : time);
+    const totalMinutes = formData.tasks.reduce((sum, task) => {
+      return sum + ((task.hours || 0) * 60) + (task.minutes || 0);
     }, 0);
 
-    const hours = Math.floor(total);
-    const minutes = Math.round((total - hours) * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     return `${hours} hrs ${minutes} min`;
   })()}
 </span>

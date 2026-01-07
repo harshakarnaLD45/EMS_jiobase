@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, HeartPulse, Coffee, Zap, Clock, FileText, RefreshCw } from 'lucide-react';
+import { Plus, Calendar, HeartPulse, Coffee, Zap, Clock, FileText, RefreshCw,AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLeave } from '../../contexts/LeaveContext';
 import { LeaveRequestForm } from '../../components';
@@ -46,6 +46,7 @@ const Leave = () => {
   const [actionStatus, setActionStatus] = useState({});
   const [actionLoading, setActionLoading] = useState(null);
   const [employeeId, setEmployeeId] = useState(null);
+  const [warningDismissed, setWarningDismissed] = useState(false);
 
   // ------------------- Fetch employee_id -------------------
   useEffect(() => {
@@ -62,23 +63,9 @@ const Leave = () => {
         }
 
         let employeeData = null;
-        let empError = null;
 
-        // 2. Try fetching by user_id
-        const { data: dataById, error: errorById } = await supabase
-          .from('employees')
-          .select('id, employee_id')
-          .eq('user_id', user.id) // Assuming user.id links to employees.user_id
-          .maybeSingle();
-        
-        if (dataById) {
-          employeeData = dataById;
-        } else {
-          empError = errorById;
-        }
-        
-        // 3. If still not found, try by email
-        if (!employeeData && user.email) {
+        // 2. Try fetching by email first (most reliable)
+        if (user.email) {
           const { data: empByEmail } = await supabase
             .from('employees')
             .select('id, employee_id')
@@ -90,13 +77,22 @@ const Leave = () => {
           }
         }
         
-        if (empError) {
-          console.error('Error fetching employee_id:', empError);
-          setFormError('Unable to identify employee. Please contact admin.');
-          return;
+        // 3. If still not found, try by id matching employee_id
+        if (!employeeData && user.id) {
+          const { data: empById } = await supabase
+            .from('employees')
+            .select('id, employee_id')
+            .eq('employee_id', user.id)
+            .maybeSingle();
+          
+          if (empById) {
+            employeeData = empById;
+          }
         }
 
-        if (employeeData?.id) {
+        if (employeeData?.employee_id) {
+          setEmployeeId(employeeData.employee_id);
+        } else if (employeeData?.id) {
           setEmployeeId(employeeData.id);
         } else {
           console.error('No employee record found for user:', user.id);
@@ -198,8 +194,8 @@ const Leave = () => {
   
   // ------------------- Leave Configuration and Calculations -------------------
   const leaveTypeConfigs = [
-    { type: 'sick', displayName: 'Sick Leave', icon: HeartPulse, iconClass: 'sick_leave_icon', color: '#ef4444', totalDays: 5 },
-    { type: 'casual', displayName: 'Casual Leave', icon: Coffee, iconClass: 'casual_leave_icon', color: '#3b82f6', totalDays: 12 },
+    { type: 'sick', displayName: 'Sick Leave', icon: HeartPulse, iconClass: 'sick_leave_icon', color: '#ef4444', totalDays: 4 },
+    { type: 'casual', displayName: 'Casual Leave', icon: Coffee, iconClass: 'casual_leave_icon', color: '#3b82f6', totalDays: 10 },
   ];
 
   // This function properly calculates used days from approved requests
@@ -239,12 +235,13 @@ const Leave = () => {
           return sum + duration;
         }, 0);
       
-      // Get used days from balance table (fallback/cross-check)
-      const balanceField = config.type === 'sick' ? 'used_sick_leaves' : 'used_casual_leaves';
+      // Get used days from balance table (source of truth to avoid duplicates)
+      const balanceField = config.type === 'sick' ? 'used_sick' : 'used_casual';
       const usedFromBalance = leaveBalance?.[balanceField] || 0;
       
-      // Use the MAXIMUM to ensure accuracy (requests are source of truth, balance is backup/sync)
-      const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
+      // Use the leave_balances table as source of truth (avoids duplicate counting from leave_requests)
+      // Only fall back to counting requests if balance is somehow 0 but requests exist
+      const actualUsed = usedFromBalance > 0 ? usedFromBalance : usedDaysFromRequests;
       const daysLeft = Math.max(0, totalAllocated - actualUsed);
       
       // console.log(`${config.type} Leave Calculation:`, {
@@ -289,9 +286,11 @@ const Leave = () => {
           return reqSum + duration;
         }, 0);
       
-      const balanceField = config.type === 'sick' ? 'used_sick_leaves' : 'used_casual_leaves';
+      // Use correct field names from leave_balances table
+      const balanceField = config.type === 'sick' ? 'used_sick' : 'used_casual';
       const usedFromBalance = leaveBalance?.[balanceField] || 0;
-      const actualUsed = Math.max(usedDaysFromRequests, usedFromBalance);
+      // Use leave_balances as source of truth (avoids duplicate counting)
+      const actualUsed = usedFromBalance > 0 ? usedFromBalance : usedDaysFromRequests;
       return sum + actualUsed;
     }, 0);
 
@@ -428,6 +427,17 @@ const Leave = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [calendarVisible]);
 
+  // Auto-hide warning banner after 10 seconds
+  useEffect(() => {
+    if (!warningDismissed && !isAdmin) {
+      const timer = setTimeout(() => {
+        setWarningDismissed(true);
+      }, 10000); // 10 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [warningDismissed, isAdmin]);
+
   // ------------------- Render -------------------
   return (
     <div className="leave_container">
@@ -557,6 +567,54 @@ const Leave = () => {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Unapproved Leave Reminder - Employee only, auto-hide after 10s */}
+      {!isAdmin && !warningDismissed && (
+      <div style={{
+                      backgroundColor: '#fef3c7',
+                      border: '1px solid #f59e0b',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      marginBottom: '16px',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px'
+                    }}>
+                      <AlertTriangle style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} size={20} />
+                      <div style={{ flex: 1 }}>
+                        <h3 style={{ 
+                          margin: 0, 
+                          fontSize: '14px', 
+                          fontWeight: 600, 
+                          color: '#92400e',
+                          marginBottom: '4px'
+                        }}>
+                          Unapproved Leave Reminder
+                        </h3>
+                       
+                        <p style={{ 
+                          margin: '8px 0 0 0', 
+                          fontSize: '12px', 
+                          color: '#92400e',
+                          fontStyle: 'italic'
+                        }}>
+                          Unapproved leave days are treated as unpaid leave
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setWarningDismissed(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          color: '#92400e'
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
       )}
 
       {/* Leave History */}

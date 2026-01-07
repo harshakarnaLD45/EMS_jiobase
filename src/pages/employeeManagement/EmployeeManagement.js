@@ -8,6 +8,7 @@ import {
     SearchAndFilter, 
     Notification 
 } from '../../components';
+import AccountDetailsModal from '../Accdetails/AccountDetailsModal';
 import './EmployeeManagement.css';
 import '../../styles/tailwind.css';
 
@@ -19,6 +20,8 @@ const EmployeeManagement = () => {
     const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
     const [selectedStatus, setSelectedStatus] = useState('All Status');
     const [notification, setNotification] = useState(null);
+    const [accountDetailsModalOpen, setAccountDetailsModalOpen] = useState(false);
+    const [selectedEmployeeForAccountDetails, setSelectedEmployeeForAccountDetails] = useState(null);
     const { employees, loading, error, addEmployee, updateEmployee, deleteEmployee, refreshEmployees } = useEmployees();
 
     const departments = ['All Departments', 'Administration', 'Development', 'Design', 'Interns'];
@@ -193,6 +196,10 @@ const EmployeeManagement = () => {
                 <EmployeeTable 
                     employees={filteredEmployees}
                     showActions={true} // Enable edit/delete actions
+                    onViewAccountDetails={(employee) => {
+                        setSelectedEmployeeForAccountDetails(employee);
+                        setAccountDetailsModalOpen(true);
+                    }}
                     onEdit={(employee) => {
                         setSelectedEmployee(employee);
                         setEditDialogOpen(true);
@@ -288,6 +295,18 @@ const EmployeeManagement = () => {
                     </Dialog.Content>
                 </Dialog.Portal>
             </Dialog.Root>
+
+            {/* Account Details Modal */}
+            {accountDetailsModalOpen && selectedEmployeeForAccountDetails && (
+                <AccountDetailsModal
+                    employeeId={selectedEmployeeForAccountDetails.employee_id || selectedEmployeeForAccountDetails.id}
+                    employeeName={selectedEmployeeForAccountDetails.name}
+                    onClose={() => {
+                        setAccountDetailsModalOpen(false);
+                        setSelectedEmployeeForAccountDetails(null);
+                    }}
+                />
+            )}
         </div>
     );
 };

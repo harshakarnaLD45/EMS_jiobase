@@ -17,11 +17,13 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EmailIcon from '@mui/icons-material/Email';
 import PhoneIcon from '@mui/icons-material/Phone';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 
 const EmployeeTable = ({ 
     employees = [], 
     onEdit = null, 
     onDelete = null,
+    onViewAccountDetails = null,
     showActions = false 
 }) => {
     const formatDate = (dateString) => {
@@ -72,7 +74,7 @@ const EmployeeTable = ({
                         <TableCell>Department</TableCell>
                         <TableCell>Position</TableCell>
                         <TableCell>Status</TableCell>
-                         <TableCell align="right">Actions</TableCell>
+                         <TableCell align="center">Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -118,7 +120,15 @@ const EmployeeTable = ({
                             </TableCell>
                             {/* {showActions && ( */}
                                 <TableCell align="right">
-                                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                    <Stack direction="row" spacing={1} justifyContent=" center">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => onViewAccountDetails && onViewAccountDetails(employee)}
+                                            color="info"
+                                            title="View Account Details"
+                                        >
+                                            <AccountBalanceIcon fontSize="small" />
+                                        </IconButton>
                                         {/* {onEdit && ( */}
                                             <IconButton
                                                 size="small"

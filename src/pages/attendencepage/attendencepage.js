@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import * as XLSX from 'xlsx';
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Badge } from "../../components/ui/badge";
-import { timesheetApi, leaveApi, employeeApi } from "../../utils/supabase";
+import { timesheetApi, leaveApi, employeeApi, holidayApi } from "../../utils/supabase";
 import { useEmployees } from "../../contexts/EmployeeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -14,6 +15,7 @@ import {
     UserX,
     Palmtree,
     Download,
+    Upload,
     LayoutGrid,
     List,
     Loader2
@@ -30,8 +32,8 @@ const years = ["2023", "2024", "2025", "2026"];
 
 export default function Attendance() {
     const currentDate = new Date();
-    const currentMonth = months[currentDate.getMonth()]; 
-    const currentYear = String(currentDate.getFullYear()); 
+    const currentMonth = months[currentDate.getMonth()];
+    const currentYear = String(currentDate.getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(currentMonth);
     const [selectedYear, setSelectedYear] = useState(currentYear);
     const [activeView, setActiveView] = useState("calendar");
@@ -45,6 +47,8 @@ export default function Attendance() {
     const [filters, setFilters] = useState({
         employee: 'all'
     });
+    const [holidays, setHolidays] = useState([]);
+    const fileInputRef = useRef(null);
 
     const { employees } = useEmployees();
     const { user, isAdmin, isEmployee } = useAuth();
@@ -57,30 +61,210 @@ export default function Attendance() {
         }));
     };
 
+    // Load holidays from Supabase on component mount
+    const loadHolidays = async () => {
+        try {
+            console.log('📅 Loading holidays from database...');
+            const data = await holidayApi.getHolidays();
+            setHolidays(data.map(h => ({
+                id: h.id,
+                date: h.date,
+                name: h.name
+            })));
+            console.log('✅ Loaded holidays:', data.length);
+        } catch (error) {
+            console.error('❌ Error loading holidays:', error);
+        }
+    };
+
+    // Load holidays when component mounts
+    useEffect(() => {
+        loadHolidays();
+    }, []);
+
+    // Handle Excel file upload for holidays
+    const handleHolidayUpload = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                // Get first sheet
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+
+                // Convert to JSON
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                // Parse holidays - expecting format: Date column (can be various formats)
+                const parsedHolidays = [];
+                const currentYear = new Date().getFullYear();
+                const nextYear = currentYear + 1;
+
+                // Track years found in the file
+                const yearsFound = new Set();
+
+                jsonData.forEach((row, index) => {
+                    if (index === 0) return; // Skip header row
+
+                    // Excel format: Column A=S.No, Column B=Holiday Name, Column C=Date, Column D=Day
+                    // Read date from column C (index 2) and holiday name from column B (index 1)
+                    let dateValue = row[2]; // Column C - Date
+                    let holidayName = row[1] || 'Holiday'; // Column B - Holiday Name
+
+                    if (dateValue) {
+                        let parsedDate = null;
+
+                        // Handle Excel serial date numbers
+                        if (typeof dateValue === 'number') {
+                            // Excel stores dates as number of days since 1900-01-01
+                            const excelEpoch = new Date(1899, 11, 30);
+                            parsedDate = new Date(excelEpoch.getTime() + dateValue * 86400000);
+                        } else if (typeof dateValue === 'string') {
+                            // Try multiple date formats
+                            // Format 1: "01-Jan-2026" or "14-Jan-2026"
+                            parsedDate = new Date(dateValue);
+
+                            // If that fails, try manual parsing for DD-MMM-YYYY format
+                            if (isNaN(parsedDate.getTime())) {
+                                // Try DD-MMM-YYYY format (e.g., "01-Jan-2026")
+                                const parts = dateValue.match(/(\d{1,2})-(\w{3})-(\d{4})/);
+                                if (parts) {
+                                    const day = parseInt(parts[1]);
+                                    const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                        'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                                    const month = monthNames.indexOf(parts[2].toLowerCase());
+                                    const year = parseInt(parts[3]);
+                                    if (month !== -1) {
+                                        parsedDate = new Date(year, month, day);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (parsedDate && !isNaN(parsedDate.getTime())) {
+                            const year = parsedDate.getFullYear();
+                            const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+                            const day = String(parsedDate.getDate()).padStart(2, '0');
+                            const dateString = `${year}-${month}-${day}`;
+
+                            // Track the year
+                            yearsFound.add(year);
+
+                            parsedHolidays.push({
+                                date: dateString,
+                                name: holidayName
+                            });
+                        }
+                    }
+                });
+
+                console.log('📅 Parsed holidays:', parsedHolidays);
+                console.log('📆 Years found in file:', Array.from(yearsFound));
+
+                // Validate years - check if dates are for current year or next year
+                const validYears = [currentYear, nextYear];
+                const invalidYears = Array.from(yearsFound).filter(y => !validYears.includes(y));
+
+                if (invalidYears.length > 0) {
+                    const proceed = window.confirm(
+                        `⚠️ Warning: The file contains holidays for year(s): ${Array.from(yearsFound).join(', ')}\n\n` +
+                        `Current year is ${currentYear}. Valid years are ${currentYear} and ${nextYear}.\n\n` +
+                        `Years outside this range: ${invalidYears.join(', ')}\n\n` +
+                        `Do you still want to upload these holidays?`
+                    );
+
+                    if (!proceed) {
+                        if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                        }
+                        return;
+                    }
+                }
+
+                // Show confirmation with year summary
+                const yearSummary = Array.from(yearsFound).map(y => {
+                    const count = parsedHolidays.filter(h => h.date.startsWith(String(y))).length;
+                    return `${y}: ${count} holidays`;
+                }).join('\n');
+
+                const confirmUpload = window.confirm(
+                    `📅 Ready to upload ${parsedHolidays.length} holidays:\n\n${yearSummary}\n\n` +
+                    `This will replace existing holidays for these years in the database.\n\nProceed?`
+                );
+
+                if (!confirmUpload) {
+                    if (fileInputRef.current) {
+                        fileInputRef.current.value = '';
+                    }
+                    return;
+                }
+
+                // Upload to Supabase
+                try {
+                    await holidayApi.uploadHolidays(parsedHolidays);
+
+                    // Reload holidays from database
+                    await loadHolidays();
+
+                    alert(`✅ Successfully uploaded ${parsedHolidays.length} holidays to database!\n\n${yearSummary}`);
+                } catch (uploadError) {
+                    console.error('❌ Error uploading holidays:', uploadError);
+                    alert(`❌ Error uploading holidays: ${uploadError.message}`);
+                }
+
+                // Reset file input
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+
+            } catch (error) {
+                console.error('❌ Error parsing Excel file:', error);
+                alert('Error parsing Excel file. Please ensure the file has a valid date column.');
+            }
+        };
+
+        reader.readAsArrayBuffer(file);
+    };
+
+    // Check if a date is a holiday
+    const isHoliday = (dateString) => {
+        return holidays.find(h => h.date === dateString);
+    };
+
     // Get attendance status for a specific day based on timesheet and leave data
     const getDayAttendanceStatus = (day) => {
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
-        
+
         // Create date string directly to avoid timezone issues
         const paddedMonth = String(monthIndex + 1).padStart(2, '0');
         const paddedDay = String(day).padStart(2, '0');
         const dateString = `${year}-${paddedMonth}-${paddedDay}`;
-        
+
         // Create date object for day calculations
         const date = new Date(year, monthIndex, day);
+
+        // Check for holiday first (highest priority after leave)
+        if (isHoliday(dateString)) {
+            return 'holiday';
+        }
 
         // Check for approved leave requests first (highest priority)
         const approvedLeave = leaveRequests?.find(leave => {
             if (leave.status !== 'approved') return false;
-            
+
             // Normalize all dates to YYYY-MM-DD format for reliable comparison
             const leaveStartDate = leave.start_date.split('T')[0]; // Remove time part if present
             const leaveEndDate = leave.end_date.split('T')[0]; // Remove time part if present
-            
+
             // Compare using string comparison since all are in YYYY-MM-DD format
             const isInRange = dateString >= leaveStartDate && dateString <= leaveEndDate;
-            
+
             // Debug logging for multi-day leave issue
             if (dateString === '2025-10-17' || dateString === '2025-10-18') {
                 // console.log(`🔍 Leave check for ${dateString}:`, {
@@ -91,7 +275,7 @@ export default function Attendance() {
                 //     leaveType: leave.leave_type
                 // });
             }
-            
+
             return isInRange;
         });
 
@@ -100,18 +284,18 @@ export default function Attendance() {
         }
 
         // Check timesheet status for this date (exact string match)
-        const dayTimesheets = timesheets.filter(timesheet => 
+        const dayTimesheets = timesheets.filter(timesheet =>
             timesheet.date === dateString
         );
 
         if (dayTimesheets.length > 0) {
             // Check if any timesheet is approved
-            const hasApprovedTimesheet = dayTimesheets.some(ts => 
+            const hasApprovedTimesheet = dayTimesheets.some(ts =>
                 ts.status === 'approved' || !ts.status // Treat null/undefined as approved for backward compatibility
             );
-            
+
             // Check if any timesheet is rejected
-            const hasRejectedTimesheet = dayTimesheets.some(ts => 
+            const hasRejectedTimesheet = dayTimesheets.some(ts =>
                 ts.status === 'rejected'
             );
 
@@ -134,23 +318,43 @@ export default function Attendance() {
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
         const daysInCurrentMonth = new Date(year, monthIndex + 1, 0).getDate();
-        
-        // Count working days (Monday-Saturday, excluding only Sunday)
+
+        // Count working days (Monday-Saturday, excluding Sundays AND holidays)
         let workingDays = 0;
+        let holidayCount = 0;
+        
         for (let day = 1; day <= daysInCurrentMonth; day++) {
             const date = new Date(year, monthIndex, day);
             const dayOfWeek = date.getDay();
-            // Count Monday-Saturday as working days (exclude only Sunday)
-            if (dayOfWeek !== 0) {
-                workingDays++;
+            
+            // Create date string to check for holidays
+            const paddedMonth = String(monthIndex + 1).padStart(2, '0');
+            const paddedDay = String(day).padStart(2, '0');
+            const dateString = `${year}-${paddedMonth}-${paddedDay}`;
+            
+            // Check if this day is a holiday
+            const isHolidayDay = holidays.find(h => h.date === dateString);
+            
+            // Skip Sundays
+            if (dayOfWeek === 0) {
+                continue;
             }
+            
+            // Skip holidays (but count them)
+            if (isHolidayDay) {
+                holidayCount++;
+                continue;
+            }
+            
+            // Count as working day (Monday-Saturday, not a holiday)
+            workingDays++;
         }
 
         // Calculate daily attendance status for the month
         let presentDays = 0;
         let leaveDays = 0;
         let halfDays = 0;
-        
+
         for (let day = 1; day <= daysInCurrentMonth; day++) {
             const status = getDayAttendanceStatus(day);
             switch (status) {
@@ -163,7 +367,7 @@ export default function Attendance() {
                 case 'half-day':
                     halfDays++;
                     break;
-                // 'weekend' and null (no data) don't count toward any category
+                // 'weekend', 'holiday' and null (no data) don't count toward any category
             }
         }
 
@@ -176,10 +380,10 @@ export default function Attendance() {
             absent: absentDays,
             leave: leaveDays,
             halfDay: halfDays,
-            holidays: 0, // Can be extended for holiday data
+            holidays: holidayCount,
             attendanceRate: workingDays > 0 ? Math.round(((presentDays + (halfDays * 0.5)) / workingDays) * 100) : 0
         };
-    }, [timesheets, leaveRequests, selectedMonth, selectedYear]);
+    }, [timesheets, leaveRequests, selectedMonth, selectedYear, holidays]);
 
     // Load timesheet data and current employee info
     useEffect(() => {
@@ -315,84 +519,84 @@ export default function Attendance() {
                 //     timesheets: allTimesheets.length,
                 //     leaveRequests: allLeaveRequests.length
                 // });
-                
+
                 // Apply employee filter if selected
                 let filteredTimesheets = allTimesheets;
                 let filteredLeaveRequests = allLeaveRequests;
-                
+
                 if (filters.employee !== 'all') {
-                    filteredTimesheets = allTimesheets.filter(ts => 
+                    filteredTimesheets = allTimesheets.filter(ts =>
                         ts.employee_name === filters.employee
                     );
-                    
+
                     filteredLeaveRequests = allLeaveRequests.filter(lr => {
-                        const employeeName = lr.employees?.name || 
-                                           `${lr.employees?.first_name || ''} ${lr.employees?.last_name || ''}`.trim() ||
-                                           'Unknown Employee';
+                        const employeeName = lr.employees?.name ||
+                            `${lr.employees?.first_name || ''} ${lr.employees?.last_name || ''}`.trim() ||
+                            'Unknown Employee';
                         return employeeName === filters.employee;
                     });
-                    
+
                     // console.log(`📊 Filtered for ${filters.employee}:`, {
                     //     timesheets: filteredTimesheets.length,
                     //     leaveRequests: filteredLeaveRequests.length
                     // });
                 }
-                
+
                 //console.log('📋 Sample timesheets:', filteredTimesheets.slice(0, 3));
                 //console.log('📅 Sample leave requests:', filteredLeaveRequests.slice(0, 3));
-                
+
                 setTimesheets(filteredTimesheets);
                 setLeaveRequests(filteredLeaveRequests);
             } else if (isEmployee() && currentEmployee) {
                 // Employee view - fetch personal timesheets and leave requests
                 //console.log('👤 Employee view: Loading personal attendance data for', currentEmployee.email);
-                
+
                 const targetEmployeeId = currentEmployee.employee_id || currentEmployee.id;
                 //console.log('🆔 Loading data for employee ID:', targetEmployeeId);
-                
+
                 try {
                     // Fetch both timesheets and leave requests for the employee
                     const [employeeTimesheets, employeeLeaveRequests] = await Promise.all([
                         timesheetApi.getTimesheetsByEmployeeId(targetEmployeeId),
                         leaveApi.getLeaveRequests(targetEmployeeId)
                     ]);
-                    
+
                     // console.log('📊 Personal data loaded:', {
                     //     timesheets: employeeTimesheets.length,
                     //     leaveRequests: employeeLeaveRequests.length
                     // });
-                    
+
                     setTimesheets(employeeTimesheets);
                     setLeaveRequests(employeeLeaveRequests);
-                    
+
                 } catch (personalDataError) {
                     console.error('❌ Error loading personal data:', personalDataError);
                     // Fallback: try with alternative ID or load all and filter
                     //console.log('🔄 Trying fallback approach...');
-                    
+
                     const [allTimesheets, allLeaveRequests] = await Promise.all([
                         timesheetApi.getAllTimesheets(),
                         leaveApi.getAllLeaveRequestsWithEmployees()
                     ]);
-                    
+
                     // Filter for current employee
                     const employeeTimesheets = allTimesheets.filter(timesheet => {
                         return timesheet.employee_id === targetEmployeeId ||
-                               String(timesheet.employee_id) === String(targetEmployeeId) ||
-                               timesheet.employees?.email === currentEmployee.email;
+                            String(timesheet.employee_id) === String(targetEmployeeId) ||
+                            timesheet.employees?.email === currentEmployee.email;
                     });
-                    
+
                     const employeeLeaveRequests = allLeaveRequests.filter(lr => {
                         return lr.employee_id === targetEmployeeId ||
-                               String(lr.employee_id) === String(targetEmployeeId) ||
-                               lr.employees?.email === currentEmployee.email;
+                            String(lr.employee_id) === String(targetEmployeeId) ||
+                            lr.employees?.email === currentEmployee.email;
                     });
-                    
+
                     // console.log('📊 Fallback filtered data:', {
                     //     timesheets: employeeTimesheets.length,
                     //     leaveRequests: employeeLeaveRequests.length
                     // });
-                    
+
                     setTimesheets(employeeTimesheets);
                     setLeaveRequests(employeeLeaveRequests);
                 }
@@ -497,7 +701,7 @@ export default function Attendance() {
 
         try {
             let tasks = [];
-            
+
             // Handle different task data formats
             if (typeof tasksData === 'string') {
                 tasks = JSON.parse(tasksData);
@@ -529,7 +733,7 @@ export default function Attendance() {
     // Helper function to get employee display name with fallback logic
     const getEmployeeDisplayName = (timesheet) => {
         const employee = timesheet.employees;
-        
+
         if (!employee) {
             console.warn('⚠️ No employee data found for timesheet:', timesheet);
             return 'Unknown Employee';
@@ -544,7 +748,7 @@ export default function Attendance() {
         const firstName = employee.first_name || '';
         const lastName = employee.last_name || '';
         const fullName = `${firstName} ${lastName}`.trim();
-        
+
         if (fullName) {
             return fullName;
         }
@@ -566,34 +770,38 @@ export default function Attendance() {
     const getDayDetails = (day) => {
         const monthIndex = months.indexOf(selectedMonth);
         const year = parseInt(selectedYear);
-        
+
         // Create date string directly to avoid timezone issues (same as getDayAttendanceStatus)
         const paddedMonth = String(monthIndex + 1).padStart(2, '0');
         const paddedDay = String(day).padStart(2, '0');
         const dateString = `${year}-${paddedMonth}-${paddedDay}`;
-        
+
         const date = new Date(year, monthIndex, day);
 
         // Get timesheet data for this specific date
         const dayTimesheets = timesheets.filter(ts => ts.date === dateString);
-        
+
         // Get leave request data for this date (using consistent string comparison)
         const dayLeaveRequests = leaveRequests.filter(leave => {
             if (leave.status !== 'approved') return false;
-            
+
             // Normalize dates to YYYY-MM-DD format for reliable comparison
             const leaveStartDate = leave.start_date.split('T')[0]; // Remove time part if present
             const leaveEndDate = leave.end_date.split('T')[0]; // Remove time part if present
-            
+
             // Compare using string comparison since all are in YYYY-MM-DD format
             return dateString >= leaveStartDate && dateString <= leaveEndDate;
         });
+
+        // Get holiday data for this date
+        const holiday = isHoliday(dateString);
 
         return {
             date,
             dateString,
             dayTimesheets,
             dayLeaveRequests,
+            holiday,
             status: getDayAttendanceStatus(day),
         };
     };
@@ -631,7 +839,7 @@ export default function Attendance() {
     }
 
     return (
-        <div style={{  minHeight: '100vh', backgroundColor: 'var(--background)' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: 'var(--background)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
@@ -726,7 +934,7 @@ export default function Attendance() {
                 gap: '24px',
                 marginBottom: '24px'
             }}>
-                <Card>
+                <Card style={{ padding: '0px' }}>
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
 
                         <div >
@@ -744,7 +952,7 @@ export default function Attendance() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                 <Card style={{ padding: '0px' }}>
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
                             <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Present</p>
@@ -761,7 +969,7 @@ export default function Attendance() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card style={{ padding: '0px' }}>
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
                             <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Leave</p>
@@ -778,7 +986,7 @@ export default function Attendance() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card style={{ padding: '0px' }}>
                     <CardContent style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px' }}>
                         <div>
                             <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Half-Day</p>
@@ -814,7 +1022,7 @@ export default function Attendance() {
             </div>
 
             <Card>
-                <CardContent style={{ padding: '24px' }}>
+                <CardContent style={{ padding: '10px  24px' }}>
                     <Tabs value={activeView} onValueChange={setActiveView} style={{ width: '100%' }}>
                         {/* <TabsList style={{ display: 'grid', width: '30%', gridTemplateColumns: '1fr 1fr' }}>
                             <TabsTrigger value="calendar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -827,13 +1035,40 @@ export default function Attendance() {
                             </TabsTrigger>
                         </TabsList> */}
 
-                        <TabsContent value="calendar" style={{ marginTop: '24px' }}>
+                        <TabsContent value="calendar">
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                <div>
-                                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '4px' }}>
-                                        Monthly Calendar - {selectedMonth} {selectedYear}
-                                    </h3>
-                                    <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>View attendance patterns and holidays</p>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }} >
+                                    <div>
+
+                                        <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '4px' }}>
+                                            Monthly Calendar - {selectedMonth} {selectedYear}
+                                        </h3>
+                                        <p style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>View attendance patterns and holidays</p>
+                                    </div>
+                                    {isAdmin() && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                onChange={handleHolidayUpload}
+                                                accept=".xlsx,.xls,.csv"
+                                                style={{ display: 'none' }}
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => fileInputRef.current?.click()}
+                                            >
+                                                <Upload style={{ width: '14px', height: '14px', marginRight: '6px' }} />
+                                                Upload holidays
+                                            </Button>
+                                            {holidays.length > 0 && (
+                                                <Badge variant="secondary" style={{ fontSize: '11px' }}>
+                                                    {holidays.length} loaded
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div style={{
@@ -867,7 +1102,10 @@ export default function Attendance() {
                                         let statusBgColor = 'var(--card)';
                                         let statusIndicator = null;
 
-                                        if (attendanceStatus === 'weekend') {
+                                        if (attendanceStatus === 'holiday') {
+                                            statusBgColor = '#2FA4A9';
+                                            statusIndicator = '🎉';
+                                        } else if (attendanceStatus === 'weekend') {
                                             statusBgColor = '#dadaddff';
                                         } else if (attendanceStatus === 'present') {
                                             statusBgColor = '#dcfce7';
@@ -944,12 +1182,13 @@ export default function Attendance() {
                                     })}
                                 </div>
 
-                              <div className="attendance-legend-container" style={{
+                                <div className="attendance-legend-container" style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '24px',
                                     paddingTop: '16px',
-                                    borderTop: '1px solid var(--border)'
+                                    borderTop: '1px solid var(--border)',
+                                    flexWrap: 'wrap'
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{
@@ -989,6 +1228,17 @@ export default function Attendance() {
                                             width: '16px',
                                             height: '16px',
                                             borderRadius: '4px',
+                                            backgroundColor: '#2FA4A9',
+                                            border: '1px solid #357d73'
+                                        }} />
+                                        <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>Holiday</span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{
+                                            width: '16px',
+                                            height: '16px',
+                                            borderRadius: '4px',
                                             backgroundColor: '#d6d7d8ff',
                                             border: '1px solid #cccdcfff'
                                         }} />
@@ -1006,8 +1256,8 @@ export default function Attendance() {
                                         <span style={{ fontSize: '14px', color: 'var(--muted-foreground)' }}>No Data ({attendanceStats.absent || 0} days)</span>
                                     </div>
                                 </div>
-                                </div>
-                           
+                            </div>
+
 
                             {/* Info modal / popup for a selected day */}
                             {infoDay !== null && (() => {
@@ -1048,17 +1298,47 @@ export default function Attendance() {
 
                                             <div style={{ marginBottom: 12 }}>
                                                 <div style={{ fontSize: 13, marginBottom: 6 }}>Status: <strong>{details.status || 'No Data'}</strong></div>
-                                                <div style={{ fontSize: 13 }}>Timesheet Records: {details.dayTimesheets.length}</div>
+                                                {details.holiday && (
+                                                    <div style={{ fontSize: 13, color: '#429a8e', fontWeight: '600' }}>
+                                                        Holiday: {details.holiday.name}
+                                                    </div>
+                                                )}
+                                                {!details.holiday && (
+                                                    <div style={{ fontSize: 13 }}>Timesheet Records: {details.dayTimesheets.length}</div>
+                                                )}
                                                 {details.dayLeaveRequests.length > 0 && (
                                                     <div style={{ fontSize: 13 }}>Leave Records: {details.dayLeaveRequests.length}</div>
                                                 )}
                                             </div>
 
-                                            {/* PRIORITY HIERARCHY: Show Leave Information OR Timesheet Information (never both) */}
-                                            {details.dayLeaveRequests.length > 0 ? (
+                                            {/* PRIORITY HIERARCHY: Show Holiday, then Leave Information OR Timesheet Information */}
+                                            {details.holiday ? (
+                                                /* PRIORITY 0: Holiday - Show holiday information */
+                                                <div style={{
+                                                    marginBottom: 12,
+                                                    padding: 12,
+                                                    borderRadius: 6,
+                                                    backgroundColor: '#429a8e20',
+                                                    border: '1px solid #429a8e'
+                                                }}>
+                                                    <div style={{
+                                                        fontSize: 16,
+                                                        fontWeight: 'bold',
+                                                        color: '#429a8e',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 8
+                                                    }}>
+                                                        {details.holiday.name} 
+                                                    </div>
+                                                    <div style={{ fontSize: 13, color: '#357d73', marginTop: 8 }}>
+                                                        This day is marked as a holiday. No work scheduled.
+                                                    </div>
+                                                </div>
+                                            ) : details.dayLeaveRequests.length > 0 ? (
                                                 /* PRIORITY 1: Approved Leave - Show ONLY leave details, hide timesheets */
                                                 <div>
-                                                    <div style={{ marginBottom: 12, padding: 12,  borderRadius: 6, border: '1px solid #a5fca9ff' }}>
+                                                    <div style={{ marginBottom: 12, padding: 12, borderRadius: 6, border: '1px solid #a5fca9ff' }}>
                                                         <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                             📅 Approved Leave Request
                                                         </div>
@@ -1073,8 +1353,8 @@ export default function Attendance() {
                                                                 'Unknown Employee';
 
                                                             return (
-                                                                <div key={i} style={{ 
-                                                                    fontSize: 13, 
+                                                                <div key={i} style={{
+                                                                    fontSize: 13,
                                                                     color: '#7f1d1d',
                                                                     backgroundColor: 'rgba(255,255,255,0.7)',
                                                                     padding: 8,
@@ -1088,10 +1368,10 @@ export default function Attendance() {
                                                                     </div>
 
                                                                     <div style={{ fontWeight: '600', marginBottom: 4 }}>
-                                                                         Type: <span style={{ color: '#dc2626', fontWeight: 500 }}>{leave.leave_type}</span>
+                                                                        Type: <span style={{ color: '#dc2626', fontWeight: 500 }}>{leave.leave_type}</span>
                                                                     </div>
                                                                     <div style={{ marginBottom: 4 }}>
-                                                                         Reason: {leave.reason}
+                                                                        Reason: {leave.reason}
                                                                     </div>
                                                                     <div style={{ marginBottom: 4 }}>
                                                                         Duration: {new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}
@@ -1108,30 +1388,30 @@ export default function Attendance() {
                                                         <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                             ⏰ Timesheet Tasks
                                                         </div>
-                                                        
+
                                                         {details.dayTimesheets.map((ts, i) => {
                                                             // Parse tasks and calculate total hours
                                                             const { parsedTasks, totalHours } = parseTimesheetTasks(ts.tasks);
                                                             const employeeName = getEmployeeDisplayName(ts);
-                                                            
+
                                                             // Use calculated hours or fallback to total_hours field
                                                             const displayHours = totalHours > 0 ? totalHours : (ts.total_hours || 0);
-                                                            
+
                                                             return (
-                                                                <div key={i} style={{ 
-                                                                    padding: 12, 
-                                                                    borderBottom: '1px solid #f5f5f5', 
-                                                                    backgroundColor: '#f8f9fa', 
-                                                                    borderRadius: 8, 
+                                                                <div key={i} style={{
+                                                                    padding: 12,
+                                                                    borderBottom: '1px solid #f5f5f5',
+                                                                    backgroundColor: '#f8f9fa',
+                                                                    borderRadius: 8,
                                                                     marginBottom: 8,
                                                                     border: '1px solid #e5e7eb',
                                                                     boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                                                 }}>
                                                                     {/* Employee Name Header */}
-                                                                    <div style={{ 
-                                                                        fontSize: 14, 
-                                                                        fontWeight: 'bold', 
-                                                                        marginBottom: 8, 
+                                                                    <div style={{
+                                                                        fontSize: 14,
+                                                                        fontWeight: 'bold',
+                                                                        marginBottom: 8,
                                                                         color: '#1f2937',
                                                                         display: 'flex',
                                                                         alignItems: 'center',
@@ -1143,28 +1423,28 @@ export default function Attendance() {
                                                                     </div>
 
                                                                     {/* Hours and Status Row */}
-                                                                    <div style={{ 
-                                                                        display: 'flex', 
+                                                                    <div style={{
+                                                                        display: 'flex',
 
-                                                                        justifyContent: 'space-between', 
+                                                                        justifyContent: 'space-between',
                                                                         alignItems: 'center',
                                                                         marginBottom: 10,
                                                                         flexWrap: 'wrap',
                                                                         gap: 8
                                                                     }}>
-                                                                          <div style={{ fontSize: 12 }}>
-                                                                                    <span style={{
-                                                                                        backgroundColor: ts.status === 'approved' ? '#dcfce7' : ts.status === 'rejected' ? '#fee2e2' : '#f3f4f6',
-                                                                                        color: ts.status === 'approved' ? '#166534' : ts.status === 'rejected' ? '#dc2626' : '#374151',
-                                                                                        padding: '4px 10px',
-                                                                                        borderRadius: '6px',
-                                                                                        fontSize: '11px',
-                                                                                        fontWeight: '600',
-                                                                                        textTransform: 'capitalize'
-                                                                                    }}>
-                                                                                        {ts.status || 'Pending'}
-                                                                                    </span>
-                                                                                </div>
+                                                                        <div style={{ fontSize: 12 }}>
+                                                                            <span style={{
+                                                                                backgroundColor: ts.status === 'approved' ? '#dcfce7' : ts.status === 'rejected' ? '#fee2e2' : '#f3f4f6',
+                                                                                color: ts.status === 'approved' ? '#166534' : ts.status === 'rejected' ? '#dc2626' : '#374151',
+                                                                                padding: '4px 10px',
+                                                                                borderRadius: '6px',
+                                                                                fontSize: '11px',
+                                                                                fontWeight: '600',
+                                                                                textTransform: 'capitalize'
+                                                                            }}>
+                                                                                {ts.status || 'Pending'}
+                                                                            </span>
+                                                                        </div>
                                                                         <div style={{ fontSize: 12, color: '#6b7280' }}>
                                                                             <span style={{ fontWeight: '600', color: '#059669' }}>
                                                                                 {displayHours > 0 ? `${displayHours}h` : 'No hours recorded'}
@@ -1175,15 +1455,15 @@ export default function Attendance() {
                                                                                 </span>
                                                                             )} */}
                                                                         </div>
-                                                                       
+
                                                                     </div>
 
                                                                     {/* Tasks Section */}
                                                                     {parsedTasks && parsedTasks.length > 0 ? (
                                                                         <div style={{ fontSize: 12 }}>
-                                                                            <div style={{ 
-                                                                                fontWeight: 'bold', 
-                                                                                marginBottom: 8, 
+                                                                            <div style={{
+                                                                                fontWeight: 'bold',
+                                                                                marginBottom: 8,
                                                                                 color: '#374151',
                                                                                 display: 'flex',
                                                                                 alignItems: 'center',
@@ -1191,18 +1471,18 @@ export default function Attendance() {
                                                                             }}>
                                                                                 📋 Tasks Completed ({parsedTasks.length})
                                                                             </div>
-                                                                            
+
                                                                             {/* Task List */}
-                                                                            <div style={{ 
-                                                                                backgroundColor: 'white', 
-                                                                                padding: 10, 
-                                                                                borderRadius: 6, 
+                                                                            <div style={{
+                                                                                backgroundColor: 'white',
+                                                                                padding: 10,
+                                                                                borderRadius: 6,
                                                                                 border: '1px solid #d1d5db',
                                                                                 maxHeight: 120,
                                                                                 overflow: 'auto'
                                                                             }}>
 
-                                                                                
+
                                                                                 {parsedTasks.map((task, taskIndex) => (
                                                                                     <div key={taskIndex} style={{
                                                                                         display: 'flex',
@@ -1212,7 +1492,7 @@ export default function Attendance() {
                                                                                         borderBottom: taskIndex < parsedTasks.length - 1 ? '1px solid #f3f4f6' : 'none',
                                                                                         gap: 8
                                                                                     }}>
-                                                                                        <div style={{ 
+                                                                                        <div style={{
                                                                                             flex: 1,
                                                                                             fontSize: 11,
                                                                                             lineHeight: '1.4',
@@ -1239,10 +1519,10 @@ export default function Attendance() {
                                                                         /* Fallback for malformed task data */
                                                                         <div style={{ fontSize: 12 }}>
                                                                             <div style={{ fontWeight: 'bold', marginBottom: 6, color: '#374151' }}>📋 Tasks (Raw Data):</div>
-                                                                            <div style={{ 
-                                                                                backgroundColor: 'white', 
-                                                                                padding: 8, 
-                                                                                borderRadius: 4, 
+                                                                            <div style={{
+                                                                                backgroundColor: 'white',
+                                                                                padding: 8,
+                                                                                borderRadius: 4,
                                                                                 border: '1px solid #d1d5db',
                                                                                 whiteSpace: 'pre-wrap',
                                                                                 fontSize: 10,
@@ -1257,9 +1537,9 @@ export default function Attendance() {
                                                                         </div>
                                                                     ) : (
                                                                         /* No tasks data */
-                                                                        <div style={{ 
-                                                                            fontSize: 11, 
-                                                                            color: '#6b7280', 
+                                                                        <div style={{
+                                                                            fontSize: 11,
+                                                                            color: '#6b7280',
                                                                             fontStyle: 'italic',
                                                                             textAlign: 'center',
                                                                             padding: 8
@@ -1274,8 +1554,8 @@ export default function Attendance() {
                                                 ) : (
                                                     /* No timesheet data and no leave */
                                                     <div style={{ padding: 16, color: 'var(--muted-foreground)', textAlign: 'center', fontStyle: 'italic' }}>
-                                                        {details.status === 'weekend' ? '🏖️ Weekend - No work scheduled' : 
-                                                         '� No timesheet records for this day'}
+                                                        {details.status === 'weekend' ? '🏖️ Weekend - No work scheduled' :
+                                                            '� No timesheet records for this day'}
                                                     </div>
                                                 )
                                             )}

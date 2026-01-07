@@ -280,6 +280,22 @@
     font-size: 14px;
 }
 
+.task-info-icon {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin-left: 4px;
+}
+
+.info-icon {
+    color: #3b82f6;
+    transition: color 0.2s ease;
+}
+
+.task-info-icon:hover .info-icon {
+    color: #1d4ed8;
+}
+
 .task_text {
     color: #1e40af;
     font-weight: 500;
