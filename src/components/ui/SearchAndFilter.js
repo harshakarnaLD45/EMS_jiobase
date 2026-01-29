@@ -11,8 +11,12 @@ const SearchAndFilter = ({
     selectedStatus = 'All Status',
     onStatusChange,
     statuses = ['All Status', 'Active', 'Leave', 'Terminated'],
+    selectedRole = 'All Roles',
+    onRoleChange,
+    roles = ['All Roles', 'Admin', 'Employee'],
     placeholder = 'Search employees...'
-}) => {
+}) => { 
+
     return (
         <div className="filters-section">
             <div className="search-bar" style={{minWidth:'60%'}}>
@@ -56,6 +60,23 @@ const SearchAndFilter = ({
                     ))}
                 </SelectContent>
             </Select>
+
+            <Select
+    value={selectedRole}
+    onValueChange={onRoleChange}
+>
+    <SelectTrigger className="role-filter">
+        <SelectValue placeholder="Select Role" />
+    </SelectTrigger>
+    <SelectContent>
+        {roles.map(role => (
+            <SelectItem key={role} value={role}>
+                {role}
+            </SelectItem>
+        ))}
+    </SelectContent>
+</Select>
+
         </div>
     );
 };

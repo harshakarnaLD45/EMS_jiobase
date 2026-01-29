@@ -22,7 +22,12 @@ const EmployeeManagement = () => {
     const [notification, setNotification] = useState(null);
     const [accountDetailsModalOpen, setAccountDetailsModalOpen] = useState(false);
     const [selectedEmployeeForAccountDetails, setSelectedEmployeeForAccountDetails] = useState(null);
-    const { employees, loading, error, addEmployee, updateEmployee, deleteEmployee, refreshEmployees } = useEmployees();
+    
+    // ✅ IMPORTANT: Get both employees AND admins from context
+    const { employees, admins, loading, error, addEmployee, updateEmployee, deleteEmployee, refreshEmployees } = useEmployees();
+    
+    const roles = ['All Roles', 'Admin', 'Employee'];
+    const [selectedRole, setSelectedRole] = useState('All Roles');
 
     const departments = ['All Departments', 'Administration', 'Development', 'Design', 'Interns'];
     const statuses = ['All Status', 'Active', 'Leave',  'Terminated'];
@@ -30,63 +35,46 @@ const EmployeeManagement = () => {
     useEffect(() => {
         if (error) {
             console.error('Error loading employees:', error);
-            // You might want to show an error message to the user
         }
     }, [error]);
-
-    // Debug function to test database connections
-    // const testDatabaseConnections = async () => {
-    //     //console.log('🧪 Testing database connections...');
-        
-    //     try {
-    //         // Test employees table
-    //         //console.log('📋 Testing employees table...');
-    //         const { employeeApi, adminApi } = await import('../../utils/supabase');
-            
-    //         const employees = await employeeApi.getEmployees();
-    //         //console.log('✅ Employees table result:', employees);
-            
-    //         // Test admins table
-    //         //console.log('👑 Testing admins table...');
-    //         const admins = await adminApi.getAdmins();
-    //         //console.log('✅ Admins table result:', admins);
-            
-    //         // Test combined function
-    //         //console.log('🔗 Testing combined function...');
-    //         const combined = await adminApi.getAllEmployeesAndAdmins();
-    //         //console.log('✅ Combined result:', combined);
-            
-    //         setNotification({
-    //             type: 'success',
-    //             message: `Database test complete. Found ${employees.length} employees and ${admins.length} admins.`
-    //         });
-            
-    //     } catch (error) {
-    //         console.error('❌ Database test failed:', error);
-    //         setNotification({
-    //             type: 'error',
-    //             message: `Database test failed: ${error.message}`
-    //         });
-    //     }
-    // };
 
     if (loading) {
         return <div className="loading">Loading employees...</div>;
     }
 
-    // Use employees from context or empty array if not loaded
-    const currentEmployees = employees || [];
+    // ✅ FIX: Combine employees and admins into one array for filtering
+    const allUsers = [
+        ...(employees || []),
+        ...(admins || [])
+    ];
 
-    const filteredEmployees = currentEmployees.filter(employee => {
+    console.log('🔍 All users for filtering:', {
+        totalUsers: allUsers.length,
+        employees: employees?.length || 0,
+        admins: admins?.length || 0,
+        sampleAdmin: admins?.[0]
+    });
+
+    const filteredEmployees = allUsers.filter(employee => {
         const matchesSearch = (employee.name?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
             (employee.email?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
             (employee.position?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
             (employee.role?.toLowerCase().includes(searchQuery.toLowerCase()) || false);
 
         const matchesDepartment = selectedDepartment === 'All Departments' ||
-            employee.department === selectedDepartment;
+         employee.department?.toLowerCase() === selectedDepartment.toLowerCase();
 
-        // Status filtering - normalize status values for comparison
+        // ✅ FIX: Improved role matching
+       let employeeRoleMapped = 'employee'; // default role
+
+    if (employee.department?.trim().toLowerCase() === 'administration') {
+        employeeRoleMapped = 'admin';
+    } else if (employee.role?.toLowerCase() === 'admin') {
+        employeeRoleMapped = 'admin';
+    }
+
+const matchesRole = selectedRole === 'All Roles' ||
+    selectedRole.toLowerCase() === employeeRoleMapped;
         const normalizeStatus = (status) => {
             if (!status) return 'active';
             const normalized = status.toLowerCase().replace(/[-_\s]/g, '');
@@ -102,7 +90,13 @@ const EmployeeManagement = () => {
             (selectedStatus === 'Active' && (!employee.status || employeeStatus === 'active')) ||
             (selectedStatus === 'On Leave' && employeeStatus === 'onleave');
 
-        return matchesSearch && matchesDepartment && matchesStatus;
+        return matchesSearch && matchesDepartment && matchesStatus && matchesRole;
+    });
+
+    console.log('🎯 Filtered results:', {
+        total: filteredEmployees.length,
+        selectedRole,
+        adminsInFiltered: filteredEmployees.filter(e => e.role === 'admin').length
     });
 
     // Handler functions for the AddEmployeeForm component
@@ -111,9 +105,7 @@ const EmployeeManagement = () => {
             type: 'success',
             message: message
         });
-        // Refresh employee data to include new additions
         refreshEmployees();
-        // Clear notification after 3 seconds
         setTimeout(() => setNotification(null), 3000);
     };
 
@@ -122,7 +114,6 @@ const EmployeeManagement = () => {
             type: 'error',
             message: message
         });
-        // Clear notification after 5 seconds
         setTimeout(() => setNotification(null), 5000);
     };
 
@@ -140,14 +131,6 @@ const EmployeeManagement = () => {
                     <p className='bodyRegularText4'>View and manage employee information</p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {/* <button
-                        className="add-employee-btn"
-                        onClick={testDatabaseConnections}
-                        style={{ backgroundColor: '#f59e0b', marginRight: '0.5rem' }}
-                        title="Test database connections"
-                    >
-                        🧪 Test DB
-                    </button> */}
                     <button
                         className="add-employee-btn bodyMediumText2"
                         onClick={() => refreshEmployees()}
@@ -155,7 +138,6 @@ const EmployeeManagement = () => {
                         title="Refresh employee data"
                     >
                         <RefreshCw size={20} />
-                        {/* Refresh */}
                     </button>
                     <button
                         className="add-employee-btn bodyMediumText3"
@@ -189,13 +171,17 @@ const EmployeeManagement = () => {
                         selectedStatus={selectedStatus}
                         onStatusChange={setSelectedStatus}
                         statuses={statuses}
+                        selectedRole={selectedRole}
+                        onRoleChange={setSelectedRole}
+                        roles={roles}
                         placeholder="Search employees by name, email, or position..."
                     />
+
                 </div>
 
                 <EmployeeTable 
                     employees={filteredEmployees}
-                    showActions={true} // Enable edit/delete actions
+                    showActions={true}
                     onViewAccountDetails={(employee) => {
                         setSelectedEmployeeForAccountDetails(employee);
                         setAccountDetailsModalOpen(true);
@@ -206,16 +192,13 @@ const EmployeeManagement = () => {
                     }}
                     onDelete={async (employee) => {
                         try {
-                            // Confirm before terminating
                             const confirmed = window.confirm(
                                 `Are you sure you want to terminate ${employee.name}?\n\nThis will mark the employee as "Terminated" but keep their records in the system.`
                             );
                             
                             if (!confirmed) return;
 
-                            // Update employee status to "Terminated" instead of deleting
                             const employeeIdToUpdate = employee.employee_id || employee.id;
-                            //console.log('🔄 Terminating employee:', { employee, employeeIdToUpdate });
                             
                             if (!employeeIdToUpdate) {
                                 throw new Error('Employee ID not found. Cannot update employee status.');
@@ -231,10 +214,7 @@ const EmployeeManagement = () => {
                                 message: `${employee.name} has been marked as Terminated`
                             });
                             
-                            // Refresh the employee list
                             refreshEmployees();
-                            
-                            // Clear notification after 3 seconds
                             setTimeout(() => setNotification(null), 3000);
                             
                         } catch (error) {

@@ -174,6 +174,11 @@ const styles = {
     cursor: 'pointer'
   }
 };
+const formatHoursMinutes = (hours, minutes) => {
+  const h = hours || 0;
+  const m = minutes || 0;
+  return `${h}:${m.toString().padStart(2, '0')}`;
+};
 
 const TimesheetForm = ({ onClose, onSubmit }) => {
   const { user } = useAuth();
@@ -282,7 +287,9 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
       setIsSubmitting(false);
     }
   };
-  
+  const minutesToHours = (totalMinutes) => {
+  return Number((totalMinutes / 60).toFixed(2));
+};
   // Handle task field changes - store hours and minutes directly
   const handleTaskChange = (index, field, value) => {
     setFormData(prev => {
@@ -303,7 +310,9 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
       const totalMinutes = newTasks.reduce((sum, t) => {
         return sum + ((t.hours || 0) * 60) + (t.minutes || 0);
       }, 0);
-      const totalHours = totalMinutes / 60;
+      
+      const totalHours = minutesToHours(totalMinutes);
+
 
       return {
         ...prev,
@@ -340,7 +349,8 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
       const totalMinutes = newTasks.reduce((sum, task) => {
         return sum + ((task.hours || 0) * 60) + (task.minutes || 0);
       }, 0);
-      const totalHours = totalMinutes / 60;
+      const totalHours = minutesToHours(totalMinutes);
+
 
       return {
         ...prev,
@@ -525,7 +535,7 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
         width: 'fit-content',
       }}
     >
-  <span className="bodyMediumText4" style={{ color: '#374151' }}>
+    <span className="bodyMediumText4" style={{ color: '#374151' }}>
   {(() => {
     const totalMinutes = formData.tasks.reduce((sum, task) => {
       return sum + ((task.hours || 0) * 60) + (task.minutes || 0);
@@ -533,9 +543,11 @@ const TimesheetForm = ({ onClose, onSubmit }) => {
 
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    return `${hours} hrs ${minutes} min`;
+
+    return `${hours}hr:${minutes.toString().padStart(2, '0')} min`;
   })()}
 </span>
+
  </div>
   </div>
 </div>

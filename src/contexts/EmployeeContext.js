@@ -5,6 +5,8 @@ const EmployeeContext = createContext();
 
 export function EmployeeProvider({ children }) {
     const [employees, setEmployees] = useState([]);
+    const [admins, setAdmins] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -12,32 +14,53 @@ export function EmployeeProvider({ children }) {
         loadEmployees();
     }, []);
 
-    const loadEmployees = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            //console.log('🔄 EmployeeContext: Loading employees from database...');
-            
-            // Get employees only (NOT admins)
-            const data = await adminApi.getAllEmployeesAndAdmins();
-            
-            // console.log('📊 EmployeeContext: Setting employee data:', {
-            //     totalRecords: data.length,
-            //     employees: data.filter(d => d.role === 'employee').length,
-            //     sampleData: data.slice(0, 2)
-            // });
-            
-            setEmployees(data);
-            //console.log('✅ EmployeeContext: Successfully loaded and set employee data');
-            
-        } catch (err) {
-            console.error('❌ EmployeeContext: Error loading employees:', err);
-            setError(`Failed to load employee data: ${err.message}`);
-            setEmployees([]); // Set empty array on error
-        } finally {
-            setLoading(false);
-        }
-    };
+   // In your EmployeeContext.js file, update the loadEmployees function:
+
+const loadEmployees = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    console.log('🔄 EmployeeContext: Loading ALL users from database...');
+    
+    // Get ALL users (admins + employees)
+    const data = await adminApi.getAllEmployeesAndAdmins();
+    
+    console.log('📊 EmployeeContext: All users data:', {
+      totalRecords: data.length,
+      sampleData: data.slice(0, 5)
+    });
+    
+    // Separate into admins and employees
+    const adminsOnly = data.filter(d => d.role === 'admin' || d.isAdmin === true);
+    const employeesOnly = data.filter(d => d.role !== 'admin' && d.isAdmin !== true);
+
+    console.log('👑 Admins found:', adminsOnly.length);
+    console.log('👤 Employees found:', employeesOnly.length);
+    
+    // Log admin details for debugging
+    if (adminsOnly.length > 0) {
+      console.log('🔍 Admin details:', adminsOnly.map(a => ({
+        id: a.id,
+        name: a.name,
+        email: a.email,
+        role: a.role,
+        source: a.source
+      })));
+    }
+
+    setEmployees(employeesOnly);
+    setAdmins(adminsOnly);
+
+    console.log('✅ EmployeeContext: Successfully loaded and set employee data');
+    
+  } catch (err) {
+    console.error('❌ EmployeeContext: Error loading employees:', err);
+    setError(`Failed to load employee data: ${err.message}`);
+    setEmployees([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
     const addEmployee = async (employeeData) => {
         try {
@@ -129,6 +152,7 @@ export function EmployeeProvider({ children }) {
     return (
         <EmployeeContext.Provider value={{
             employees,
+            admins,
             loading,
             error,
             addEmployee,

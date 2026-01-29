@@ -1522,32 +1522,61 @@ export const adminApi = {
     },
 
     // Get all employees (admins are NOT employees)
-    async getAllEmployeesAndAdmins() {
-        // console.log('👥 Fetching employees from database...');
+    // Get all employees AND admins combined
+async getAllEmployeesAndAdmins() {
+    console.log('👥 Fetching ALL users (employees + admins) from database...');
+    
+    try {
+        // Get employees from employees table
+        console.log('📋 Fetching from employees table...');
+        const employees = await employeeApi.getEmployees();
+        console.log('✅ Employees loaded:', employees.length);
         
-        try {
-            // Get employees from employees table
-            // console.log('📋 Fetching from employees table...');
-            const employees = await employeeApi.getEmployees();
-            // console.log('✅ Employees loaded from database:', employees.length, employees.length > 0 ? employees.slice(0, 2) : 'No employees found');
-            
-            // Add role field to employees for consistency
-            const employeesWithRole = employees.map(emp => ({
-                ...emp,
-                role: emp.role || 'employee',
-                isAdmin: false
-            }));
-            
-            // console.log('🎯 Final result:');
-            console.log(`   - Total employees: ${employeesWithRole.length}`);
-            // console.log('   - Sample data:', employeesWithRole.slice(0, 3));
-            return employeesWithRole;
-            
-        } catch (error) {
-            console.error('❌ Error fetching employees:', error);
-            throw error;
-        }
-    },
+        // Get admins from admins table
+        console.log('📋 Fetching from admins table...');
+        const admins = await this.getAdmins();
+        console.log('✅ Admins loaded:', admins.length);
+        
+        // Add role field to employees for consistency
+        const employeesWithRole = employees.map(emp => ({
+            ...emp,
+            role: emp.role || 'employee',
+            isAdmin: false,
+            source: 'employees'
+        }));
+        
+        // Add role field to admins for consistency
+        const adminsWithRole = admins.map(admin => ({
+            ...admin,
+            role: 'admin',
+            isAdmin: true,
+            source: 'admins',
+            // Map admin fields to match employee structure
+            employee_id: admin.id, // Use admin id as employee_id for filtering
+            name: admin.name,
+            email: admin.email,
+            phone: admin.phone || 'N/A',
+            department: 'Administration',
+            position: admin.role || 'Admin',
+            join_date: admin.created_at ? admin.created_at.split('T')[0] : null, 
+            status: admin.is_active ? 'Active' : 'Inactive'
+        }));
+        
+        // Combine both arrays
+        const allUsers = [...employeesWithRole, ...adminsWithRole];
+        
+        console.log('🎯 Final result:');
+        console.log(`   - Total employees: ${employeesWithRole.length}`);
+        console.log(`   - Total admins: ${adminsWithRole.length}`);
+        console.log(`   - Total users: ${allUsers.length}`);
+        
+        return allUsers; // ✅ NOW RETURNING BOTH!
+        
+    } catch (error) {
+        console.error('❌ Error fetching users:', error);
+        throw error;
+    }
+},
 
     // Simple employee name fetcher
     getEmployeeName: async (userId) => {
