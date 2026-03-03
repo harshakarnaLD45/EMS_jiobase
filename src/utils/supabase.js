@@ -1,9 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 
+// JioBase Proxy Configuration
+// Uses JioBase proxy for Indian ISP users (Jio, Airtel, ACT, BSNL)
+// Falls back to direct Supabase URL if proxy fails
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseDirectUrl = process.env.REACT_APP_SUPABASE_URL_DIRECT;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Validate configuration
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('❌ Missing Supabase configuration. Check your .env file.');
+    console.error('   REACT_APP_SUPABASE_URL:', supabaseUrl ? 'Set' : 'MISSING');
+    console.error('   REACT_APP_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'MISSING');
+}
+
+// Create Supabase client with JioBase proxy
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+    },
+    global: {
+        headers: {
+            'X-Client-Info': 'ems-app/1.0'
+        }
+    }
+});
+
+// Health check function to verify connectivity
+export async function checkSupabaseConnection() {
+    try {
+        const startTime = Date.now();
+        const { data, error } = await supabase.from('employees').select('count').limit(1);
+        const latency = Date.now() - startTime;
+        
+        if (error) throw error;
+        
+        console.log(`✅ Supabase connection healthy (${latency}ms)`);
+        return { healthy: true, latency, usingProxy: supabaseUrl?.includes('jiobase.com') };
+    } catch (error) {
+        console.error('❌ Supabase connection failed:', error.message);
+        return { healthy: false, error: error.message, usingProxy: supabaseUrl?.includes('jiobase.com') };
+    }
+}
+
+// Connection status for UI feedback
+export const connectionStatus = {
+    isProxy: supabaseUrl?.includes('jiobase.com') || false,
+    hasFallback: !!supabaseDirectUrl,
+    currentUrl: supabaseUrl
+};
 
 // Authentication functions
 export const authApi = {

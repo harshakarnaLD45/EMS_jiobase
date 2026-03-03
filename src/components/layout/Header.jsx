@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Clock, Menu } from 'lucide-react';
 import { StatusIndicator } from '../../components/common/StatusIndicator/Status_Indicator';
+import NetworkStatus from '../common/NetworkStatus/NetworkStatus';
 
 const Header = ({ onMenuClick, user }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -120,6 +121,9 @@ const Header = ({ onMenuClick, user }) => {
             Welcome back 
             <StatusIndicator isOnline={isOnline && isActive} />
           </div>
+          
+          {/* Network Status for ISP detection */}
+          <NetworkStatus />
         </div>
       </div>
     </header>

@@ -1,0 +1,151 @@
+/* Network Status Component Styles */
+
+.network-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.network-status__indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.network-status__text {
+    font-weight: 500;
+}
+
+.network-status__details {
+    color: #6b7280;
+    font-size: 11px;
+}
+
+/* Checking state */
+.network-status--checking {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+.network-status--checking .network-status__indicator {
+    background-color: #9ca3af;
+    animation: pulse 1.5s infinite;
+}
+
+/* Healthy state */
+.network-status--healthy {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.network-status--healthy:hover {
+    background-color: #a7f3d0;
+}
+
+.network-status--healthy .network-status__indicator {
+    background-color: #10b981;
+}
+
+/* Error state */
+.network-status--error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.network-status--error .network-status__indicator {
+    background-color: #ef4444;
+    animation: pulse 1s infinite;
+}
+
+.network-status__content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.network-status__help-btn {
+    background: none;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.network-status__help-btn:hover {
+    background-color: #fecaca;
+}
+
+.network-status__help {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #fecaca;
+    font-size: 12px;
+    width: 100%;
+}
+
+.network-status__help p {
+    margin: 0 0 8px 0;
+}
+
+.network-status__help ul {
+    margin: 8px 0;
+    padding-left: 16px;
+}
+
+.network-status__help li {
+    margin: 4px 0;
+}
+
+.network-status__retry-btn {
+    background-color: #ef4444;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background-color 0.2s;
+}
+
+.network-status__retry-btn:hover:not(:disabled) {
+    background-color: #dc2626;
+}
+
+.network-status__retry-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Animation */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Compact mode for headers */
+.network-status--compact {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+.network-status--compact .network-status__indicator {
+    width: 6px;
+    height: 6px;
+}
